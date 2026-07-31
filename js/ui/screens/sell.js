@@ -10,6 +10,7 @@ async function save(ctx, tab, row) {
 export async function render(root, ctx) {
   const items = (await ctx.store.getAll('items')).filter((i) => i.quantity_on_hand > 0);
   const events = ctx.settings.events || [];
+  const currentShow = ctx.settings.current_show || events[0] || '';
   let selected = null;
 
   root.innerHTML = `
@@ -25,7 +26,7 @@ export async function render(root, ctx) {
       <label>Payment</label>
       <select id="pay">${PAYMENT_METHODS.map((p) => `<option value="${p}">${payLabel(p)}</option>`).join('')}</select>
       <label>Show / event</label>
-      <input id="event" list="events" value="${events[0] || ''}" />
+      <input id="event" list="events" value="${currentShow}" placeholder="Type a show name…" />
       <datalist id="events">${events.map((e) => `<option value="${e}">`).join('')}</datalist>
       <button class="btn" id="do">Record sale</button>
     </div>
@@ -70,6 +71,7 @@ export async function render(root, ctx) {
     } catch (e) { ctx.toast(e.message); return; }
     await save(ctx, 'items', result.updatedItem);
     await save(ctx, 'sales', result.saleRow);
+    await ctx.setCurrentShow(result.saleRow.event);
     await ctx.syncNow();
     ctx.toast(`Sold — profit ${formatCents(result.saleRow.profit_cents)}`);
     ctx.refresh();

@@ -1,4 +1,4 @@
-import { allocatePurchase } from '../../core/allocation.js';
+import { allocatePurchase, marketTotalCents, suggestedOfferCents } from '../../core/allocation.js';
 import { newItem, CATEGORIES, PAYMENT_METHODS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
 
@@ -7,108 +7,184 @@ async function save(ctx, tab, row) {
   await ctx.sync.enqueue({ kind: 'put', tab, row });
 }
 
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><path fill="#e6c565" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#e6c565" opacity=".85"/></svg>`;
+
 export async function render(root, ctx) {
   const events = ctx.settings.events || [];
+  const currentShow = ctx.settings.current_show || events[0] || '';
   const lines = [];
+  let editing = -1;
+  let pct = Number(ctx.settings.buy_percent) || 80;
+  let overridden = false;
+  let finalCents = 0;
+
+  const marketTotal = () => marketTotalCents(lines);
+  const suggested = () => suggestedOfferCents(lines, pct);
 
   root.innerHTML = `
     <h1>Buy</h1>
-    <div class="card">
-      <label>Cost method</label>
-      <select id="method">
-        <option value="by_market">Lot total, split by market value</option>
-        <option value="even">Lot total, split evenly</option>
-        <option value="per_item">Type each card's price</option>
-      </select>
-      <div id="lot-wrap">
-        <label>Lot total $ (what you paid for the stack)</label>
-        <input id="lot" inputmode="decimal" value="0.00" />
-      </div>
-      <label>Payment</label>
-      <select id="pay">${PAYMENT_METHODS.map((p) => `<option value="${p}">${payLabel(p)}</option>`).join('')}</select>
-      <label>Show / event</label>
-      <input id="event" list="events" value="${events[0] || ''}" />
-      <datalist id="events">${events.map((e) => `<option value="${e}">`).join('')}</datalist>
-    </div>
 
     <div class="card">
-      <h1 style="font-size:16px">Add a card to this buy</h1>
-      <label>Name</label><input id="l-name" placeholder="Umbreon VMAX Alt Art" />
+      <label>Add a card the customer is selling</label>
+      <input id="l-name" placeholder="Umbreon VMAX Alt Art" autocomplete="off" />
       <div class="row">
         <div><label>Category</label>
           <select id="l-cat">${CATEGORIES.map((c) => `<option value="${c}">${catLabel(c)}</option>`).join('')}</select></div>
         <div><label>Qty</label><input id="l-qty" inputmode="numeric" value="1" /></div>
+        <div><label>Market value $ (each)</label><input id="l-mv" inputmode="decimal" value="" placeholder="0.00" /></div>
       </div>
-      <div class="row">
-        <div><label>Market value $ (each)</label><input id="l-mv" inputmode="decimal" value="0.00" /></div>
-        <div id="l-price-wrap" hidden><label>Price $ (each)</label><input id="l-price" inputmode="decimal" value="0.00" /></div>
-      </div>
-      <button class="btn secondary" id="add-line">Add to buy</button>
+      <button class="btn secondary" id="add-line">Add card</button>
     </div>
 
     <div id="lines"></div>
-    <div class="total-bar"><span id="preview" class="muted">No cards yet</span>
-      <button class="btn" style="width:auto;margin:0" id="save">Save buy</button></div>
+
+    <section class="offer" id="offer" hidden>
+      <div class="offer-line"><span>Total market value</span><span class="offer-mkt" id="o-mkt">$0.00</span></div>
+      <div class="offer-line">
+        <span>Buy at</span>
+        <span class="pct-ctl">
+          <button class="pct-step" id="pct-dn" aria-label="lower">−</button>
+          <input id="pct" class="pct-in" inputmode="numeric" value="${pct}" aria-label="buy percent" /><span class="pct-sign">%</span>
+          <button class="pct-step" id="pct-up" aria-label="raise">+</button>
+        </span>
+      </div>
+      <div class="offer-line sug"><span id="o-sug-k">At ${pct}% of market</span><span class="offer-sug" id="o-sug">$0.00</span></div>
+      <div class="offer-final">
+        <span class="offer-final-k">Offer <span class="muted2" id="o-reset" hidden>· reset to ${pct}%</span></span>
+        <span class="offer-final-v"><span class="cur">$</span><input id="final" class="final-in" inputmode="decimal" value="0.00" aria-label="final offer" /></span>
+      </div>
+    </section>
+
+    <div class="card" id="terms" hidden>
+      <div class="row">
+        <div><label>Payment (money out)</label>
+          <select id="pay">${PAYMENT_METHODS.map((p) => `<option value="${p}">${payLabel(p)}</option>`).join('')}</select></div>
+        <div><label>Show / event</label>
+          <input id="event" list="events" value="${esc(currentShow)}" placeholder="Type a show name…" />
+          <datalist id="events">${events.map((e) => `<option value="${esc(e)}">`).join('')}</datalist></div>
+      </div>
+    </div>
+
+    <div class="total-bar">
+      <button class="btn secondary" style="width:auto;margin:0" id="present" disabled>Show customer</button>
+      <button class="btn" style="width:auto;margin:0" id="save" disabled>Record buy</button>
+    </div>
   `;
 
-  const methodEl = root.querySelector('#method');
-  const togglePer = () => {
-    const per = methodEl.value === 'per_item';
-    root.querySelector('#lot-wrap').hidden = per;
-    root.querySelector('#l-price-wrap').hidden = !per;
-  };
-  methodEl.onchange = () => { togglePer(); renderLines(); };
-  togglePer();
+  const $ = (s) => root.querySelector(s);
 
   const renderLines = () => {
-    root.querySelector('#lines').innerHTML = lines.map((l, i) => `
-      <div class="list-item"><span>${l.name} <span class="chip">${catLabel(l.category)}</span>
-        <div class="muted">x${l.quantity} · mkt ${formatCents(l.market_value_cents)}${l.entered_price_cents ? ` · price ${formatCents(l.entered_price_cents)}` : ''}</div></span>
-        <button class="btn ghost" style="width:auto;margin:0" data-del="${i}">✕</button></div>`).join('');
-    root.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => { lines.splice(+b.getAttribute('data-del'), 1); renderLines(); }; });
-    preview();
+    $('#lines').innerHTML = lines.map((l, i) => {
+      if (i === editing) {
+        return `<div class="list-item editing">
+          <div class="edit-grid">
+            <input class="edit-name" data-en="${i}" value="${esc(l.name)}" aria-label="name" />
+            <div class="row">
+              <select data-ec="${i}" aria-label="category">${CATEGORIES.map((c) => `<option value="${c}" ${c === l.category ? 'selected' : ''}>${catLabel(c)}</option>`).join('')}</select>
+              <input data-eq="${i}" inputmode="numeric" value="${l.quantity}" aria-label="qty" />
+              <input data-em="${i}" inputmode="decimal" value="${(l.market_value_cents / 100).toFixed(2)}" aria-label="market value each" />
+            </div>
+            <button class="btn secondary edit-done" data-done="${i}">Done</button>
+          </div></div>`;
+      }
+      return `<div class="list-item"><span>${esc(l.name)} <span class="chip">${catLabel(l.category)}</span>
+        <div class="muted">${l.quantity > 1 ? `×${l.quantity} · ` : ''}mkt ${formatCents(l.market_value_cents)}${l.quantity > 1 ? ` = ${formatCents(l.market_value_cents * l.quantity)}` : ''}</div></span>
+        <span class="row-actions">
+          <button class="btn ghost row-btn" data-edit="${i}" aria-label="edit">✎</button>
+          <button class="btn ghost row-btn" data-del="${i}" aria-label="remove">✕</button>
+        </span></div>`;
+    }).join('');
+    root.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => { editing = +b.getAttribute('data-edit'); renderLines(); const n = $(`[data-en="${editing}"]`); if (n) { n.focus(); n.select(); } }; });
+    root.querySelectorAll('[data-done]').forEach((b) => { b.onclick = () => {
+      const i = +b.getAttribute('data-done');
+      lines[i] = {
+        name: $(`[data-en="${i}"]`).value.trim() || lines[i].name,
+        category: $(`[data-ec="${i}"]`).value,
+        quantity: parseInt($(`[data-eq="${i}"]`).value, 10) || 1,
+        market_value_cents: dollarsToCents($(`[data-em="${i}"]`).value),
+      };
+      editing = -1; refresh();
+    }; });
+    root.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => {
+      const i = +b.getAttribute('data-del');
+      lines.splice(i, 1);
+      if (editing === i) editing = -1; else if (editing > i) editing -= 1;
+      refresh();
+    }; });
   };
 
-  const preview = () => {
-    if (lines.length === 0) { root.querySelector('#preview').textContent = 'No cards yet'; return; }
-    const res = allocatePurchase({
-      lot_total_cents: dollarsToCents(root.querySelector('#lot').value),
-      method: methodEl.value, lines,
-    });
-    const total = res.lines.reduce((s, l) => s + l.line_total_cents, 0);
-    root.querySelector('#preview').textContent =
-      `${lines.length} card(s) · total cost ${formatCents(total)}${res.fallback ? ' (even split — missing values)' : ''}`;
+  const refresh = () => {
+    renderLines();
+    const has = lines.length > 0;
+    $('#offer').hidden = !has;
+    $('#terms').hidden = !has;
+    $('#present').disabled = !has;
+    $('#save').disabled = !has;
+    $('#o-mkt').textContent = formatCents(marketTotal());
+    $('#o-sug').textContent = formatCents(suggested());
+    $('#o-sug-k').textContent = `At ${pct}% of market`;
+    if (!overridden) { finalCents = suggested(); $('#final').value = (finalCents / 100).toFixed(2); }
+    $('#o-reset').hidden = !overridden;
+    $('#o-reset').textContent = `· reset to ${pct}%`;
   };
-  root.querySelector('#lot').oninput = preview;
 
-  root.querySelector('#add-line').onclick = () => {
-    const name = root.querySelector('#l-name').value.trim();
-    if (!name) { ctx.toast('Name required'); return; }
+  $('#add-line').onclick = () => {
+    const name = $('#l-name').value.trim();
+    if (!name) { ctx.toast('Card name required'); return; }
     lines.push({
       name,
-      category: root.querySelector('#l-cat').value,
-      quantity: parseInt(root.querySelector('#l-qty').value, 10) || 1,
-      market_value_cents: dollarsToCents(root.querySelector('#l-mv').value),
-      entered_price_cents: dollarsToCents(root.querySelector('#l-price').value),
+      category: $('#l-cat').value,
+      quantity: parseInt($('#l-qty').value, 10) || 1,
+      market_value_cents: dollarsToCents($('#l-mv').value),
     });
-    root.querySelector('#l-name').value = '';
-    root.querySelector('#l-mv').value = '0.00';
-    root.querySelector('#l-price').value = '0.00';
-    renderLines();
+    $('#l-name').value = ''; $('#l-qty').value = '1'; $('#l-mv').value = '';
+    $('#l-name').focus();
+    refresh();
+  };
+  $('#l-mv').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#add-line').click(); });
+
+  const setPct = (v) => { pct = Math.max(1, Math.min(100, v || 0)); $('#pct').value = pct; overridden = false; refresh(); };
+  $('#pct').oninput = () => setPct(parseInt($('#pct').value, 10));
+  $('#pct-up').onclick = () => setPct(pct + 5);
+  $('#pct-dn').onclick = () => setPct(pct - 5);
+  $('#final').oninput = () => { overridden = true; finalCents = dollarsToCents($('#final').value); $('#o-reset').hidden = false; };
+  $('#o-reset').onclick = () => { overridden = false; refresh(); };
+
+  // ---- Customer-facing present mode (transparent: shows everything incl. the %) ----
+  $('#present').onclick = () => {
+    const rows = lines.map((l) => `
+      <div class="present-row"><span class="present-name">${esc(l.name)}${l.quantity > 1 ? ` <span class="present-q">×${l.quantity}</span>` : ''}</span>
+        <span class="present-val">${formatCents(l.market_value_cents * l.quantity)}</span></div>`).join('');
+    const ov = document.createElement('div');
+    ov.className = 'present';
+    ov.innerHTML = `
+      <div class="present-card">
+        <div class="present-head">${CROWN}<span>Treasure Crown Collectibles</span></div>
+        <div class="present-title">Our buy offer</div>
+        <div class="present-list">${rows}</div>
+        <div class="present-sum">
+          <div class="present-line"><span>Total market value</span><span>${formatCents(marketTotal())}</span></div>
+          <div class="present-line"><span>Our buy rate</span><span>${pct}% of market</span></div>
+        </div>
+        <div class="present-offer-k">We'll pay you</div>
+        <div class="present-offer">${formatCents(finalCents)}</div>
+        <button class="btn present-close">Close</button>
+      </div>`;
+    const close = () => ov.remove();
+    ov.addEventListener('click', (e) => { if (e.target === ov || e.target.classList.contains('present-close')) close(); });
+    document.body.appendChild(ov);
   };
 
-  root.querySelector('#save').onclick = async () => {
+  $('#save').onclick = async () => {
     if (lines.length === 0) { ctx.toast('Add at least one card'); return; }
-    const method = methodEl.value;
-    const lot_total_cents = method === 'per_item'
-      ? lines.reduce((s, l) => s + (l.entered_price_cents || 0), 0)
-      : dollarsToCents(root.querySelector('#lot').value);
-    const res = allocatePurchase({ lot_total_cents, method, lines });
+    if (finalCents <= 0) { ctx.toast('Set an offer above $0'); return; }
+    const res = allocatePurchase({ lot_total_cents: finalCents, method: 'by_market', lines });
 
     const ids = await ctx.sync.makeIds();
     const purchase_id = ids.purchase();
     const when = new Date().toISOString().slice(0, 10);
-    const event = root.querySelector('#event').value.trim();
+    const event = $('#event').value.trim();
 
     for (const l of res.lines) {
       const item = newItem({
@@ -119,13 +195,16 @@ export async function render(root, ctx) {
       await save(ctx, 'items', item);
     }
     await save(ctx, 'purchases', {
-      purchase_id, date: when, event, lot_total_cents,
-      payment_method: root.querySelector('#pay').value,
-      allocation_method: res.method_used, item_count: res.lines.length, notes: '',
+      purchase_id, date: when, event, lot_total_cents: finalCents, market_total_cents: marketTotal(),
+      payment_method: $('#pay').value, allocation_method: res.method_used, item_count: res.lines.length,
+      notes: `offer ${pct}% of market ${formatCents(marketTotal())}${res.fallback ? ' (even split — missing values)' : ''}`,
     });
     await ctx.sync.commitIds();
+    await ctx.setCurrentShow(event);
     await ctx.syncNow();
-    ctx.toast(`Bought ${res.lines.length} card(s)`);
+    ctx.toast(`Bought ${res.lines.length} card(s) for ${formatCents(finalCents)}`);
     location.hash = '#/inventory';
   };
+
+  refresh();
 }

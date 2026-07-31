@@ -1,4 +1,14 @@
-import { allocateByWeights, splitEven } from './money.js';
+import { allocateByWeights, splitEven, pctOfCents } from './money.js';
+
+// Sum of each line's market value across its quantity.
+export function marketTotalCents(lines) {
+  return lines.reduce((s, l) => s + (l.market_value_cents || 0) * (l.quantity || 1), 0);
+}
+
+// Suggested buy/trade-in offer: a percentage of total market value (e.g. 80%).
+export function suggestedOfferCents(lines, percent) {
+  return pctOfCents(marketTotalCents(lines), percent);
+}
 
 export function allocatePurchase({ lot_total_cents, lines, method }) {
   if (method === 'per_item') {

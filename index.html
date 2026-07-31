@@ -3,20 +3,31 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#7b1113" />
+  <meta name="theme-color" content="#17130b" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./css/styles.css" />
-  <title>Treasure Crown</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23c9a23f' d='M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z'/%3E%3Crect x='4' y='19.2' width='16' height='2.2' rx='1' fill='%2317130b'/%3E%3C/svg%3E" />
+  <title>Treasure Crown Collectibles</title>
 </head>
 <body>
   <header class="topbar">
-    <span class="brand">Treasure Crown</span>
+    <span class="brand">
+      <svg class="crown" viewBox="0 0 24 24" aria-hidden="true">
+        <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#e6c565"/><stop offset="1" stop-color="#b8912f"/>
+        </linearGradient></defs>
+        <path fill="url(#cg)" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/>
+        <rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#17130b"/>
+      </svg>
+      <span class="t1">Treasure</span><span class="t2">Crown</span><span class="t3">Collectibles</span>
+    </span>
     <span id="sync-pill" class="pill">•</span>
   </header>
   <main id="screen" class="screen"></main>
   <nav class="tabbar">
     <a href="#/dashboard">Home</a>
-    <a href="#/inventory">Stock</a>
+    <a href="#/shows">Shows</a>
+    <a href="#/inventory">Inventory</a>
     <a href="#/buy">Buy</a>
     <a href="#/sell">Sell</a>
     <a href="#/trade">Trade</a>

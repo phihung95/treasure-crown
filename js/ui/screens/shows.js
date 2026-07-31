@@ -1,0 +1,98 @@
+import { reportByShow } from '../../core/shows.js';
+import { formatCents, payLabel } from '../format.js';
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><path fill="#e6c565" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#e6c565" opacity=".85"/></svg>`;
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function fmtDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  return m ? `${MONTHS[+m[2] - 1]} ${+m[3]}` : '';
+}
+function dateRange(a, b) {
+  if (!a && !b) return '';
+  if (!b || a === b) return fmtDate(a);
+  const sameMonth = a.slice(0, 7) === b.slice(0, 7);
+  return sameMonth ? `${fmtDate(a).split(' ')[0]} ${+a.slice(8, 10)}–${+b.slice(8, 10)}` : `${fmtDate(a)} – ${fmtDate(b)}`;
+}
+
+export async function render(root, ctx) {
+  const [sales, purchases, trades] = await Promise.all([
+    ctx.store.getAll('sales'), ctx.store.getAll('purchases'), ctx.store.getAll('trades'),
+  ]);
+  const rows = reportByShow({ sales, purchases, trades });
+  let selected = null;
+
+  const drawList = () => {
+    if (!rows.length) {
+      root.innerHTML = `<h1>Shows</h1>
+        <div class="card empty">${CROWN}<h2>No shows yet</h2>
+        <p>Tag your buys, sales, and trades with a show and each one gets summarized here.</p></div>`;
+      return;
+    }
+    root.innerHTML = `<h1>Shows</h1>` + rows.map((r) => `
+      <div class="card show-card" data-show="${esc(r.event)}" role="button" tabindex="0">
+        <div class="show-head"><span class="show-name">${esc(r.event)}</span><span class="show-date">${dateRange(r.first_date, r.last_date)}</span></div>
+        <div class="show-value ${r.value_added_cents >= 0 ? 'pos' : 'neg'}">${formatCents(r.value_added_cents)} <span class="show-value-k">value added</span></div>
+        <div class="show-stats">
+          <span class="ss">Sold <b>${r.sold.units}</b> · ${formatCents(r.sold.revenue_cents)}</span>
+          <span class="ss">Bought <b>${r.bought.items}</b> · ${formatCents(r.bought.spent_cents)}</span>
+          ${r.traded.count ? `<span class="ss">Trades <b>${r.traded.count}</b></span>` : ''}
+          <span class="ss net-ss">Net cash ${formatCents(r.net_cash_cents)}</span>
+        </div>
+      </div>`).join('');
+    root.querySelectorAll('[data-show]').forEach((el) => {
+      const open = () => { selected = el.getAttribute('data-show'); drawDetail(); };
+      el.onclick = open;
+      el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+    });
+  };
+
+  const drawDetail = () => {
+    const r = rows.find((x) => x.event === selected);
+    if (!r) { selected = null; drawList(); return; }
+    const tradeCashNet = r.traded.cash_in_cents - r.traded.cash_out_cents;
+    const pays = Object.keys(r.by_payment);
+    root.innerHTML = `
+      <button class="btn ghost back-btn" id="back">← All shows</button>
+      <div class="show-detail-h"><h1>${esc(r.event)}</h1><div class="muted">${dateRange(r.first_date, r.last_date)}</div></div>
+
+      <section class="hero">
+        <div class="hero-top"><span class="hero-label">Value added this show</span>${CROWN}</div>
+        <div class="hero-amount ${r.value_added_cents >= 0 ? '' : 'is-neg'}">${formatCents(r.value_added_cents)}</div>
+        <div class="hero-sub"><span>${formatCents(r.sold.profit_cents)} sold profit · ${formatCents(r.bought.gain_cents)} buy gain${r.traded.count ? ` · ${formatCents(r.traded.profit_cents)} trade` : ''}</span></div>
+      </section>
+
+      <div class="card">
+        <div class="dl"><span>Sold</span><span><b>${r.sold.units}</b> cards · ${r.sold.lines} sale${r.sold.lines === 1 ? '' : 's'}</span></div>
+        <div class="dl"><span>Revenue</span><span>${formatCents(r.sold.revenue_cents)}</span></div>
+        <div class="dl"><span>Profit</span><span class="${r.sold.profit_cents >= 0 ? 'pos' : 'neg'}"><b>${formatCents(r.sold.profit_cents)}</b></span></div>
+      </div>
+
+      <div class="card">
+        <div class="dl"><span>Bought / picked up</span><span><b>${r.bought.items}</b> item${r.bought.items === 1 ? '' : 's'}</span></div>
+        <div class="dl"><span>Spent</span><span>${formatCents(r.bought.spent_cents)}</span></div>
+        ${r.bought.market_cents > 0 ? `<div class="dl"><span>Market value picked up</span><span>${formatCents(r.bought.market_cents)}</span></div>
+        <div class="dl"><span>Below-market gain</span><span class="${r.bought.gain_cents >= 0 ? 'pos' : 'neg'}"><b>${formatCents(r.bought.gain_cents)}</b></span></div>` : ''}
+      </div>
+
+      ${r.traded.count ? `<div class="card">
+        <div class="dl"><span>Trades</span><span><b>${r.traded.count}</b></span></div>
+        <div class="dl"><span>Trade profit</span><span class="${r.traded.profit_cents >= 0 ? 'pos' : 'neg'}">${formatCents(r.traded.profit_cents)}</span></div>
+        <div class="dl"><span>Cash in / out</span><span>${formatCents(r.traded.cash_in_cents)} / ${formatCents(r.traded.cash_out_cents)}</span></div>
+      </div>` : ''}
+
+      <div class="card">
+        <div class="dl"><span>Net cash (in pocket)</span><span class="${r.net_cash_cents >= 0 ? '' : 'neg'}"><b>${formatCents(r.net_cash_cents)}</b></span></div>
+        <div class="dl"><span>Cash in · out</span><span>${formatCents(r.sold.revenue_cents)} · ${formatCents(r.bought.spent_cents)}${tradeCashNet !== 0 ? ` · ${formatCents(tradeCashNet)} trade` : ''}</span></div>
+      </div>
+
+      ${pays.length ? `<div class="card">
+        <div class="dl dl-h"><span>Payments taken</span><span></span></div>
+        ${pays.map((p) => `<div class="dl"><span>${payLabel(p)}</span><span>${formatCents(r.by_payment[p])}</span></div>`).join('')}
+      </div>` : ''}
+    `;
+    root.querySelector('#back').onclick = () => { selected = null; drawList(); };
+  };
+
+  drawList();
+}

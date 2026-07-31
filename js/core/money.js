@@ -6,6 +6,10 @@ export function fromCents(cents) {
   return Math.round(cents) / 100;
 }
 
+export function pctOfCents(cents, percent) {
+  return Math.round((cents * percent) / 100);
+}
+
 export function formatCents(cents) {
   const sign = cents < 0 ? '-' : '';
   const abs = Math.abs(Math.round(cents));

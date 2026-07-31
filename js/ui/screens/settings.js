@@ -9,17 +9,29 @@ export async function render(root, ctx) {
   const s = ctx.settings;
   const filaments = await ctx.store.getAll('filaments');
 
+  const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   root.innerHTML = `
     <h1>Setup</h1>
     <div class="card">
-      <label>Backend web app URL</label>
-      <input id="url" value="${s.backend_url || ''}" placeholder="https://script.google.com/.../exec" />
-      <label>Backend token</label>
-      <input id="token" value="${s.backend_token || ''}" />
+      <h1 style="font-size:16px">Shows</h1>
+      ${s.current_show
+        ? `<p class="muted">Active show: <strong style="color:var(--gold-deep)">${esc(s.current_show)}</strong> — auto-fills Buy / Sell / Trade.</p>`
+        : '<p class="muted">No active show yet. Set one on Buy, Sell, or Trade, or add it below.</p>'}
+      <label>Your shows (comma-separated)</label>
+      <input id="events" value="${esc((s.events || []).join(', '))}" placeholder="Bergen Show, Oslo Con" />
+      <p class="muted" style="margin-top:6px">New shows you type on Buy / Sell / Trade are saved here automatically.</p>
+    </div>
+
+    <div class="card">
+      <h1 style="font-size:16px">Rates &amp; backend</h1>
+      <label>Default buy rate (% of market value you pay)</label>
+      <input id="buypct" inputmode="numeric" value="${s.buy_percent ?? 80}" />
       <label>Machine hourly rate (electricity + wear), $/hr</label>
       <input id="rate" inputmode="decimal" value="${centsInputValue(s.machine_hourly_rate_cents || 0)}" />
-      <label>Shows / events (comma separated)</label>
-      <input id="events" value="${(s.events || []).join(', ')}" />
+      <label>Backend web app URL</label>
+      <input id="url" value="${esc(s.backend_url || '')}" placeholder="https://script.google.com/.../exec" />
+      <label>Backend token</label>
+      <input id="token" value="${esc(s.backend_token || '')}" />
       <button class="btn" id="save">Save settings</button>
       <button class="btn secondary" id="pull">Pull now</button>
     </div>
@@ -43,6 +55,7 @@ export async function render(root, ctx) {
       backend_url: root.querySelector('#url').value.trim(),
       backend_token: root.querySelector('#token').value.trim(),
       machine_hourly_rate_cents: dollarsToCents(root.querySelector('#rate').value),
+      buy_percent: Math.max(1, Math.min(100, parseInt(root.querySelector('#buypct').value, 10) || 80)),
       events: root.querySelector('#events').value.split(',').map((x) => x.trim()).filter(Boolean),
     });
     ctx.toast('Saved — reloading');
