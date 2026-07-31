@@ -28,11 +28,12 @@ export async function render(root, ctx) {
       <input id="buypct" inputmode="numeric" value="${s.buy_percent ?? 80}" />
       <label>Machine hourly rate (electricity + wear), $/hr</label>
       <input id="rate" inputmode="decimal" value="${centsInputValue(s.machine_hourly_rate_cents || 0)}" />
-      <label>Backend web app URL</label>
-      <input id="url" value="${esc(s.backend_url || '')}" placeholder="https://script.google.com/.../exec" />
-      <label>Backend token</label>
-      <input id="token" value="${esc(s.backend_token || '')}" />
-      <button class="btn" id="save">Save settings</button>
+      <label>Supabase project URL</label>
+      <input id="url" value="${esc(s.supabase_url || '')}" placeholder="https://xxxx.supabase.co" autocomplete="off" />
+      <label>Supabase anon key</label>
+      <input id="token" value="${esc(s.supabase_key || '')}" placeholder="eyJhbGciOi…" autocomplete="off" />
+      <p class="muted" style="margin-top:6px">Connects this device to your shared database. Same URL + key on every device.</p>
+      <button class="btn" id="save">Save &amp; connect</button>
       <button class="btn secondary" id="pull">Pull now</button>
     </div>
 
@@ -52,8 +53,8 @@ export async function render(root, ctx) {
 
   root.querySelector('#save').onclick = async () => {
     await ctx.store.setSettings({
-      backend_url: root.querySelector('#url').value.trim(),
-      backend_token: root.querySelector('#token').value.trim(),
+      supabase_url: root.querySelector('#url').value.trim(),
+      supabase_key: root.querySelector('#token').value.trim(),
       machine_hourly_rate_cents: dollarsToCents(root.querySelector('#rate').value),
       buy_percent: Math.max(1, Math.min(100, parseInt(root.querySelector('#buypct').value, 10) || 80)),
       events: root.querySelector('#events').value.split(',').map((x) => x.trim()).filter(Boolean),

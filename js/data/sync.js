@@ -39,9 +39,11 @@ export function createSync({ store, api }) {
     },
     async flush() {
       const ops = await store.getAll('queue');
-      if (ops.length === 0) return { pushed: 0, remaining: 0 };
-      await api.push(ops);
-      for (const op of ops) await store.remove('queue', op.op_id);
+      if (ops.length > 0) {
+        await api.push(ops);
+        for (const op of ops) await store.remove('queue', op.op_id);
+      }
+      if (counters) await api.setCounters(counters); // keep shared id counters current
       return { pushed: ops.length, remaining: 0 };
     },
     async pull() {
@@ -49,6 +51,8 @@ export function createSync({ store, api }) {
       for (const tab of DATA_TABS) {
         if (Array.isArray(data[tab])) await store.bulkPut(tab, data[tab]);
       }
+      const remote = await api.getCounters(); // adopt shared counters from the backend
+      if (remote) { counters = { ...remote }; await store.setSettings({ counters: { ...remote } }); }
     },
   };
 }

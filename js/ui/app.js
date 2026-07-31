@@ -17,7 +17,7 @@ function isServerError(e) { return String((e && e.message) || '').startsWith('ba
 async function boot() {
   const store = await openStore();
   let settings = await store.getSettings();
-  const api = createApi({ url: settings.backend_url, token: settings.backend_token });
+  const api = createApi({ url: settings.supabase_url, key: settings.supabase_key });
   const sync = createSync({ store, api });
 
   const pending = async () => { try { return (await store.getAll('queue')).length; } catch { return 0; } };
@@ -41,7 +41,7 @@ async function boot() {
     },
     async syncNow() {
       const n = await pending();
-      if (!settings.backend_url) { setPill('local', n ? `Saved · ${n} local` : 'Saved locally'); return; }
+      if (!settings.supabase_url) { setPill('local', n ? `Saved · ${n} local` : 'Saved locally'); return; }
       try {
         setPill('pending', n ? `Syncing ${n}…` : 'Syncing…');
         await sync.flush();
@@ -57,11 +57,11 @@ async function boot() {
   };
   window.__tcc = ctx;
 
-  if (settings.backend_url) {
+  if (settings.supabase_url) {
     try {
       setPill('pending', 'Syncing…');
       await sync.flush();      // push any changes queued offline last session first
-      await sync.pull();       // then refresh local from the Sheet
+      await sync.pull();       // then refresh local from Supabase
       setPill('ok', 'Synced');
     } catch (e) {
       const left = await pending();
