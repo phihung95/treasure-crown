@@ -82,6 +82,10 @@ async function boot() {
     document.querySelectorAll('.tabbar a').forEach((a) => {
       a.classList.toggle('active', a.getAttribute('href') === `#/${screen}`);
     });
+    const moreBtn = document.getElementById('tab-more');
+    if (moreBtn) moreBtn.classList.toggle('active', ['shows', 'prints', 'settings'].includes(screen));
+    const sheet = document.getElementById('more-sheet');
+    if (sheet) sheet.hidden = true;
     const root = document.getElementById('screen');
     root.innerHTML = '';
     const mod = await import(`./screens/${screen}.js`);
@@ -89,6 +93,14 @@ async function boot() {
   }
 
   window.addEventListener('hashchange', route);
+
+  const moreBtn = document.getElementById('tab-more');
+  const moreSheet = document.getElementById('more-sheet');
+  if (moreBtn && moreSheet) {
+    moreBtn.onclick = () => { moreSheet.hidden = !moreSheet.hidden; };
+    moreSheet.onclick = (e) => { if (e.target === moreSheet) moreSheet.hidden = true; };
+  }
+
   if (!location.hash) location.hash = '#/dashboard';
   await route();
 }

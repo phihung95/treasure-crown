@@ -1,4 +1,4 @@
-const CACHE = 'tcc-v11';
+const CACHE = 'tcc-v12';
 const SHELL = [
   './', './index.html', './css/styles.css', './manifest.webmanifest',
   './js/ui/app.js', './js/ui/format.js',
