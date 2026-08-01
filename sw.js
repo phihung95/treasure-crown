@@ -1,4 +1,4 @@
-const CACHE = 'tcc-v19';
+const CACHE = 'tcc-v20';
 const SHELL = [
   './', './index.html', './css/styles.css', './manifest.webmanifest',
   './js/ui/app.js', './js/ui/format.js', './js/config.js',
@@ -8,10 +8,34 @@ const SHELL = [
   './js/ui/screens/dashboard.js', './js/ui/screens/shows.js', './js/ui/screens/inventory.js', './js/ui/screens/buy.js',
   './js/ui/screens/sell.js', './js/ui/screens/trade.js', './js/ui/screens/prints.js', './js/ui/screens/settings.js'
 ];
-self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))); });
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    await self.clients.claim(); // take control of open tabs immediately
+  })());
+});
+
+// Network-first for same-origin GETs: always serve the latest deploy when
+// online (and refresh the cache), fall back to cache only when offline. This
+// keeps the app fully usable offline at shows without ever serving stale code.
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return;
-  e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request)));
+  if (url.origin !== location.origin || e.request.method !== 'GET') return;
+  e.respondWith((async () => {
+    try {
+      const fresh = await fetch(e.request);
+      const cache = await caches.open(CACHE);
+      cache.put(e.request, fresh.clone());
+      return fresh;
+    } catch {
+      const cached = await caches.match(e.request);
+      return cached || Response.error();
+    }
+  })());
 });
