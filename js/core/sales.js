@@ -1,4 +1,5 @@
 import { decrement } from './inventory.js';
+import { deriveStatus } from './schema.js';
 
 export function bookSale({ item, quantity, unit_price_cents, payment_method, date, event, notes, channel }, txn_id) {
   const updatedItem = decrement(item, quantity);
@@ -27,4 +28,13 @@ export function bookSale({ item, quantity, unit_price_cents, payment_method, dat
     ...(channel ? { channel } : {}),
   };
   return { saleRow, updatedItem };
+}
+
+// Reverse a booked sale: put the sold quantity back on the item's shelf. The
+// cost basis is untouched (a void isn't a repurchase). Returns the item to
+// re-save; if the item no longer exists, updatedItem is null.
+export function voidSale(sale, item) {
+  if (!item) return { updatedItem: null };
+  const newQty = (item.quantity_on_hand || 0) + (sale.quantity || 0);
+  return { updatedItem: { ...item, quantity_on_hand: newQty, status: deriveStatus(newQty) } };
 }

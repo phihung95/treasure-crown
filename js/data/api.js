@@ -36,6 +36,16 @@ export function createApi({ url, key, getToken, fetchImpl }) {
     if (!res.ok) throw new Error(`backend error: ${res.status}`);
   }
 
+  // Delete a single row by its primary key (e.g. voiding a sale).
+  async function del(tab, id) {
+    const field = ID_FIELD[tab];
+    const res = await doFetch(`${base}/${tab}?${field}=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
+    });
+    if (!res.ok) throw new Error(`backend error: ${res.status}`);
+  }
+
   return {
     // Pull every data table; returns { items:[...], sales:[...], ... } like the old backend.
     async pull() {
@@ -50,17 +60,20 @@ export function createApi({ url, key, getToken, fetchImpl }) {
       return out;
     },
 
-    // Apply queued write ops (kind 'put') by upserting rows into their table.
+    // Apply queued write ops: upsert 'put' rows, DELETE 'delete' rows.
     async push(ops) {
       ensure();
-      // Dedupe by primary key per table (last write wins) so one upsert batch
-      // never targets the same row twice (Postgres ON CONFLICT rejects that).
+      // Dedupe puts by primary key per table (last write wins) so one upsert
+      // batch never targets the same row twice (Postgres ON CONFLICT rejects that).
       const byTab = {};
+      const deletes = [];
       for (const op of ops) {
-        if (op.kind !== 'put' || !DATA_TABS.includes(op.tab)) continue;
-        (byTab[op.tab] ||= new Map()).set(op.row[ID_FIELD[op.tab]], op.row);
+        if (!DATA_TABS.includes(op.tab)) continue;
+        if (op.kind === 'delete') deletes.push(op);
+        else if (op.kind === 'put') (byTab[op.tab] ||= new Map()).set(op.row[ID_FIELD[op.tab]], op.row);
       }
       for (const tab of Object.keys(byTab)) await upsert(tab, [...byTab[tab].values()]);
+      for (const op of deletes) await del(op.tab, op.id);
       return { applied: ops.length };
     },
 
