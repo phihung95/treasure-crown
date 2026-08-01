@@ -1,8 +1,59 @@
 import { openStore } from '../data/store.js';
 import { createApi } from '../data/api.js';
 import { createSync } from '../data/sync.js';
+import { createAuth } from '../data/auth.js';
 
 const ROUTES = ['dashboard', 'shows', 'inventory', 'buy', 'sell', 'trade', 'prints', 'settings'];
+const LOGIN_CROWN = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><defs><linearGradient id="lgc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6c565"/><stop offset="1" stop-color="#b8912f"/></linearGradient></defs><path fill="url(#lgc)" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#17130b"/></svg>`;
+const lgEsc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Full-screen email + password sign-in. On a fresh device it also collects the
+// Supabase URL + anon key so the operator can connect and sign in in one step.
+function renderLogin(store, settings) {
+  const needsConfig = !settings.supabase_url || !settings.supabase_key;
+  const ov = document.createElement('div');
+  ov.className = 'login-screen';
+  ov.innerHTML = `
+    <form class="login-card" id="lg-form" autocomplete="on">
+      <div class="login-brand">${LOGIN_CROWN}<span>Treasure Crown</span></div>
+      <div class="login-sub">Sign in to your account</div>
+      <div id="lg-conn" ${needsConfig ? '' : 'hidden'}>
+        <label>Supabase project URL</label>
+        <input id="lg-url" value="${lgEsc(settings.supabase_url || '')}" placeholder="https://xxxx.supabase.co" autocomplete="off" />
+        <label>Supabase anon key</label>
+        <input id="lg-key" value="${lgEsc(settings.supabase_key || '')}" placeholder="eyJhbGciOi…" autocomplete="off" />
+      </div>
+      <label>Email</label>
+      <input id="lg-email" type="email" autocomplete="username" placeholder="you@example.com" />
+      <label>Password</label>
+      <input id="lg-pass" type="password" autocomplete="current-password" placeholder="••••••••" />
+      <div class="login-err" id="lg-err" hidden></div>
+      <button class="btn" type="submit" id="lg-btn">Sign in</button>
+      ${needsConfig ? '' : '<button type="button" class="login-link" id="lg-toggle">Change connection</button>'}
+    </form>`;
+  document.body.appendChild(ov);
+  const $ = (s) => ov.querySelector(s);
+  const toggle = $('#lg-toggle');
+  if (toggle) toggle.onclick = () => { $('#lg-conn').hidden = !$('#lg-conn').hidden; };
+  $('#lg-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $('#lg-btn'); const err = $('#lg-err');
+    err.hidden = true; btn.disabled = true; btn.textContent = 'Signing in…';
+    try {
+      let url = settings.supabase_url; let key = settings.supabase_key;
+      if ($('#lg-url')) {
+        url = $('#lg-url').value.trim(); key = $('#lg-key').value.trim();
+        await store.setSettings({ supabase_url: url, supabase_key: key });
+      }
+      const auth = createAuth({ url, key, store });
+      await auth.signIn($('#lg-email').value.trim(), $('#lg-pass').value);
+      location.reload();
+    } catch (ex) {
+      err.textContent = ex.message || 'Sign in failed'; err.hidden = false;
+      btn.disabled = false; btn.textContent = 'Sign in';
+    }
+  };
+}
 
 function setPill(state, text) {
   const pill = document.getElementById('sync-pill');
@@ -17,8 +68,14 @@ function isServerError(e) { return String((e && e.message) || '').startsWith('ba
 async function boot() {
   const store = await openStore();
   let settings = await store.getSettings();
-  const api = createApi({ url: settings.supabase_url, key: settings.supabase_key });
+  const auth = createAuth({ url: settings.supabase_url, key: settings.supabase_key, store });
+  const api = createApi({ url: settings.supabase_url, key: settings.supabase_key, getToken: () => auth.token() });
   const sync = createSync({ store, api });
+
+  // Require sign-in once a Supabase backend is configured; a fresh device gets
+  // the login screen (which also collects the connection details).
+  const session = await auth.restore();
+  if (!settings.supabase_url || !session) { renderLogin(store, settings); return; }
 
   const pending = async () => { try { return (await store.getAll('queue')).length; } catch { return 0; } };
 
@@ -54,6 +111,8 @@ async function boot() {
       }
     },
     refresh() { route(); },
+    auth,
+    async signOut() { await auth.signOut(); location.reload(); },
   };
   window.__tcc = ctx;
 

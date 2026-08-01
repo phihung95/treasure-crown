@@ -41,6 +41,16 @@ body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-ser
 .pill.err { color:var(--neg); background:#fbe9e6; border-color:#f2ccc5; }
 .pill.tap { cursor:pointer; } .pill.tap:hover { filter:brightness(.97); }
 
+/* ---- Login screen ---- */
+.login-screen { position:fixed; inset:0; z-index:100; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:20px calc(20px + env(safe-area-inset-right)) 20px calc(20px + env(safe-area-inset-left)); overflow-y:auto; }
+.login-card { width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:22px; }
+.login-brand { display:flex; align-items:center; gap:9px; font-weight:800; font-size:17px; letter-spacing:.3px; text-transform:uppercase; }
+.login-sub { color:var(--ink-3); font-size:14px; margin:5px 0 12px; }
+.login-card label { margin-top:12px; }
+.login-err { margin-top:12px; padding:9px 11px; background:#fbe9e6; border:1px solid #f2ccc5; color:var(--neg); border-radius:9px; font-size:13px; font-weight:600; }
+.login-link { display:block; width:100%; background:none; border:none; color:var(--gold-deep); font-weight:700; font-size:13px; margin-top:12px; cursor:pointer; text-decoration:underline; }
+.acct-card { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+
 .screen { padding:16px; max-width:760px; margin:0 auto; }
 
 /* ---- Bottom tab bar: icon + label, safe-area aware ---- */

@@ -10,8 +10,11 @@ export async function render(root, ctx) {
   const filaments = await ctx.store.getAll('filaments');
 
   const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const acct = ctx.auth && ctx.auth.email ? ctx.auth.email() : '';
   root.innerHTML = `
     <h1>Setup</h1>
+    ${acct ? `<div class="card acct-card"><span class="muted">Signed in as <strong style="color:var(--ink)">${esc(acct)}</strong></span>
+      <button class="btn ghost" id="signout" style="width:auto;margin:0">Sign out</button></div>` : ''}
     <div class="card">
       <h1 style="font-size:16px">Shows</h1>
       ${s.current_show
@@ -62,6 +65,9 @@ export async function render(root, ctx) {
     ctx.toast('Saved — reloading');
     setTimeout(() => location.reload(), 600);
   };
+
+  const signout = root.querySelector('#signout');
+  if (signout) signout.onclick = () => ctx.signOut();
 
   root.querySelector('#pull').onclick = async () => {
     try { await ctx.sync.pull(); ctx.toast('Pulled from Sheet'); ctx.refresh(); }

@@ -4,10 +4,15 @@
 const DATA_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments'];
 const ID_FIELD = { items: 'item_id', sales: 'txn_id', trades: 'trade_id', purchases: 'purchase_id', print_products: 'print_product_id', print_parts: 'part_id', filaments: 'filament_id' };
 
-export function createApi({ url, key, fetchImpl }) {
+export function createApi({ url, key, getToken, fetchImpl }) {
   const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
   const base = url ? `${url.replace(/\/+$/, '')}/rest/v1` : '';
-  const headers = { apikey: key || '', Authorization: `Bearer ${key || ''}`, 'Content-Type': 'application/json' };
+  // apikey is the public anon key; Authorization carries the signed-in user's
+  // token when available (falls back to the anon key when auth is unused).
+  async function authHeaders() {
+    const token = getToken ? await getToken() : null;
+    return { apikey: key || '', Authorization: `Bearer ${token || key || ''}`, 'Content-Type': 'application/json' };
+  }
 
   function ensure() { if (!url || !key) throw new Error('backend not configured'); }
 
@@ -25,7 +30,7 @@ export function createApi({ url, key, fetchImpl }) {
     if (rows.length === 0) return;
     const res = await doFetch(`${base}/${tab}`, {
       method: 'POST',
-      headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
+      headers: { ...(await authHeaders()), Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify(normalize(rows)),
     });
     if (!res.ok) throw new Error(`backend error: ${res.status}`);
@@ -36,8 +41,9 @@ export function createApi({ url, key, fetchImpl }) {
     async pull() {
       ensure();
       const out = {};
+      const h = await authHeaders();
       for (const tab of DATA_TABS) {
-        const res = await doFetch(`${base}/${tab}?select=*`, { headers });
+        const res = await doFetch(`${base}/${tab}?select=*`, { headers: h });
         if (!res.ok) throw new Error(`backend error: ${res.status}`);
         out[tab] = await res.json();
       }
@@ -61,7 +67,7 @@ export function createApi({ url, key, fetchImpl }) {
     // Shared id counters live in a single app_meta row so devices don't collide.
     async getCounters() {
       ensure();
-      const res = await doFetch(`${base}/app_meta?id=eq.app&select=counters`, { headers });
+      const res = await doFetch(`${base}/app_meta?id=eq.app&select=counters`, { headers: await authHeaders() });
       if (!res.ok) throw new Error(`backend error: ${res.status}`);
       const rows = await res.json();
       return rows[0] ? (rows[0].counters || {}) : {};

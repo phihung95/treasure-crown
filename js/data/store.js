@@ -2,7 +2,7 @@ import { TABS, ID_FIELD, createMemStore } from './memstore.js';
 
 const DB_NAME = 'tcc';
 const DB_VERSION = 1;
-const DEFAULT_SETTINGS = { machine_hourly_rate_cents: 0, events: [], current_show: '', supabase_url: '', supabase_key: '', buy_percent: 80, counters: {} };
+const DEFAULT_SETTINGS = { machine_hourly_rate_cents: 0, events: [], current_show: '', supabase_url: '', supabase_key: '', session: null, buy_percent: 80, counters: {} };
 
 function openDb() {
   return new Promise((resolve, reject) => {
