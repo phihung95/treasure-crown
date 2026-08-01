@@ -2,6 +2,7 @@ import { openStore } from '../data/store.js';
 import { createApi } from '../data/api.js';
 import { createSync } from '../data/sync.js';
 import { createAuth } from '../data/auth.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 
 const ROUTES = ['dashboard', 'shows', 'inventory', 'buy', 'sell', 'trade', 'prints', 'settings'];
 const LOGIN_CROWN = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><defs><linearGradient id="lgc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6c565"/><stop offset="1" stop-color="#b8912f"/></linearGradient></defs><path fill="url(#lgc)" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#17130b"/></svg>`;
@@ -68,14 +69,18 @@ function isServerError(e) { return String((e && e.message) || '').startsWith('ba
 async function boot() {
   const store = await openStore();
   let settings = await store.getSettings();
-  const auth = createAuth({ url: settings.supabase_url, key: settings.supabase_key, store });
-  const api = createApi({ url: settings.supabase_url, key: settings.supabase_key, getToken: () => auth.token() });
+  // Fall back to the app's built-in public connection so a fresh device only
+  // needs email + password. The anon key is safe to ship; RLS guards the data.
+  const supaUrl = settings.supabase_url || SUPABASE_URL;
+  const supaKey = settings.supabase_key || SUPABASE_ANON_KEY;
+  const auth = createAuth({ url: supaUrl, key: supaKey, store });
+  const api = createApi({ url: supaUrl, key: supaKey, getToken: () => auth.token() });
   const sync = createSync({ store, api });
 
-  // Require sign-in once a Supabase backend is configured; a fresh device gets
-  // the login screen (which also collects the connection details).
+  // The backend is always configured (built-in), so sign-in just needs the
+  // operator's email + password; a fresh device goes straight to that.
   const session = await auth.restore();
-  if (!settings.supabase_url || !session) { renderLogin(store, settings); return; }
+  if (!supaUrl || !session) { renderLogin(store, { ...settings, supabase_url: supaUrl, supabase_key: supaKey }); return; }
 
   const pending = async () => { try { return (await store.getAll('queue')).length; } catch { return 0; } };
 
@@ -98,7 +103,7 @@ async function boot() {
     },
     async syncNow() {
       const n = await pending();
-      if (!settings.supabase_url) { setPill('local', n ? `Saved · ${n} local` : 'Saved locally'); return; }
+      if (!supaUrl) { setPill('local', n ? `Saved · ${n} local` : 'Saved locally'); return; }
       try {
         setPill('pending', n ? `Syncing ${n}…` : 'Syncing…');
         await sync.flush();
@@ -116,7 +121,7 @@ async function boot() {
   };
   window.__tcc = ctx;
 
-  if (settings.supabase_url) {
+  if (supaUrl) {
     try {
       setPill('pending', 'Syncing…');
       await sync.flush();      // push any changes queued offline last session first

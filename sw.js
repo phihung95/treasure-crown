@@ -1,7 +1,7 @@
-const CACHE = 'tcc-v18';
+const CACHE = 'tcc-v19';
 const SHELL = [
   './', './index.html', './css/styles.css', './manifest.webmanifest',
-  './js/ui/app.js', './js/ui/format.js',
+  './js/ui/app.js', './js/ui/format.js', './js/config.js',
   './js/core/money.js', './js/core/ids.js', './js/core/schema.js', './js/core/costing.js',
   './js/core/allocation.js', './js/core/inventory.js', './js/core/sales.js', './js/core/trades.js', './js/core/dashboard.js', './js/core/shows.js',
   './js/data/store.js', './js/data/memstore.js', './js/data/api.js', './js/data/sync.js', './js/data/auth.js',
