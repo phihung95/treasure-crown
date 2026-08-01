@@ -8,7 +8,13 @@ async function save(ctx, tab, row) {
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
 function attr(i) {
-  if (i.category === 'slab') return `${i.grader || ''} ${i.grade || ''}`.trim();
+  if (i.category === 'slab') {
+    const grade = (i.grade || '').trim();
+    const grader = (i.grader || '').trim();
+    // The grade often already carries the company (e.g. "PSA 10") — don't repeat it.
+    if (grade && grader && !grade.toLowerCase().includes(grader.toLowerCase())) return `${grader} ${grade}`;
+    return grade || grader;
+  }
   if (i.category === 'single') return `${i.set || ''}${i.card_number ? ` #${i.card_number}` : ''}`.trim();
   if (i.category === 'sealed') return `${i.product_type || ''} ${i.set || ''}`.trim();
   return '';

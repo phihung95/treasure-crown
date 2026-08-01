@@ -19,6 +19,9 @@ export async function render(root, ctx) {
     <div id="results"></div>
     <div id="form" hidden>
       <div class="card" id="sel"></div>
+      <label class="dice-toggle"><input type="checkbox" id="dice" />
+        <span>🎲 Dice challenge</span>
+        <span class="muted">— $5 a roll, tracked separately</span></label>
       <div class="row">
         <div><label>Qty</label><input id="qty" inputmode="numeric" value="1" /></div>
         <div><label>Price $ (each)</label><input id="price" inputmode="decimal" value="0.00" /></div>
@@ -44,15 +47,22 @@ export async function render(root, ctx) {
     root.querySelectorAll('[data-pick]').forEach((el) => { el.onclick = () => pick(el.getAttribute('data-pick')); });
   };
 
+  const isDice = () => root.querySelector('#dice').checked;
+  const setPrice = () => {
+    // A dice roll is always $5; otherwise start from the item's market value.
+    root.querySelector('#price').value = isDice() ? '5.00' : (selected ? (selected.market_value_cents / 100).toFixed(2) : '0.00');
+  };
+
   const pick = (id) => {
     selected = items.find((i) => i.item_id === id);
     root.querySelector('#form').hidden = false;
     root.querySelector('#sel').innerHTML = `<strong>${selected.name}</strong>
       <div class="muted">on hand x${selected.quantity_on_hand} · cost ${formatCents(selected.unit_cost_cents)}</div>`;
-    root.querySelector('#price').value = (selected.market_value_cents / 100).toFixed(2);
+    setPrice();
   };
 
   root.querySelector('#q').oninput = renderResults;
+  root.querySelector('#dice').onchange = setPrice;
 
   root.querySelector('#do').onclick = async () => {
     if (!selected) return;
@@ -66,6 +76,7 @@ export async function render(root, ctx) {
         payment_method: root.querySelector('#pay').value,
         date: new Date().toISOString().slice(0, 10),
         event: root.querySelector('#event').value.trim(), notes: '',
+        channel: isDice() ? 'dice' : '',
       }, ids.sale());
       await ctx.sync.commitIds();
     } catch (e) { ctx.toast(e.message); return; }

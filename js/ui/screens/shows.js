@@ -37,6 +37,7 @@ export async function render(root, ctx) {
           <span class="ss">Sold <b>${r.sold.units}</b> · ${formatCents(r.sold.revenue_cents)}</span>
           <span class="ss">Bought <b>${r.bought.items}</b> · ${formatCents(r.bought.spent_cents)}</span>
           ${r.traded.count ? `<span class="ss">Trades <b>${r.traded.count}</b></span>` : ''}
+          ${r.dice.rolls ? `<span class="ss">🎲 <b>${r.dice.rolls}</b> · ${formatCents(r.dice.revenue_cents)}</span>` : ''}
           <span class="ss net-ss">Net cash ${formatCents(r.net_cash_cents)}</span>
         </div>
       </div>`).join('');
@@ -74,6 +75,13 @@ export async function render(root, ctx) {
         ${r.bought.market_cents > 0 ? `<div class="dl"><span>Market value picked up</span><span>${formatCents(r.bought.market_cents)}</span></div>
         <div class="dl"><span>Below-market gain</span><span class="${r.bought.gain_cents >= 0 ? 'pos' : 'neg'}"><b>${formatCents(r.bought.gain_cents)}</b></span></div>` : ''}
       </div>
+
+      ${r.dice.rolls ? `<div class="card">
+        <div class="dl dl-h"><span>🎲 Dice challenge</span><span></span></div>
+        <div class="dl"><span>Rolls</span><span><b>${r.dice.rolls}</b> · ${formatCents(r.dice.revenue_cents)} taken</span></div>
+        <div class="dl"><span>Prizes given (cost)</span><span>${formatCents(r.dice.cost_cents)}</span></div>
+        <div class="dl"><span>Dice profit</span><span class="${r.dice.profit_cents >= 0 ? 'pos' : 'neg'}"><b>${formatCents(r.dice.profit_cents)}</b></span></div>
+      </div>` : ''}
 
       ${r.traded.count ? `<div class="card">
         <div class="dl"><span>Trades</span><span><b>${r.traded.count}</b></span></div>

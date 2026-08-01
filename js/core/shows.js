@@ -8,6 +8,8 @@ export function reportByShow({ sales = [], purchases = [], trades = [] }) {
       map.set(key, {
         event: key,
         sold: { lines: 0, units: 0, revenue_cents: 0, cost_cents: 0, profit_cents: 0 },
+        // Dice-challenge rolls are a subset of `sold`, broken out for tracking.
+        dice: { rolls: 0, revenue_cents: 0, cost_cents: 0, profit_cents: 0 },
         bought: { items: 0, spent_cents: 0, market_cents: 0, gain_cents: 0 },
         traded: { count: 0, profit_cents: 0, cash_in_cents: 0, cash_out_cents: 0 },
         by_payment: {},
@@ -33,6 +35,12 @@ export function reportByShow({ sales = [], purchases = [], trades = [] }) {
       r.sold.cost_cents += s.cost_cents || 0;
       r.sold.profit_cents += s.profit_cents || 0;
       if (s.payment_method) r.by_payment[s.payment_method] = (r.by_payment[s.payment_method] || 0) + (s.revenue_cents || 0);
+      if (s.channel === 'dice') {
+        r.dice.rolls += 1;
+        r.dice.revenue_cents += s.revenue_cents || 0;
+        r.dice.cost_cents += s.cost_cents || 0;
+        r.dice.profit_cents += s.profit_cents || 0;
+      }
     }
   }
   for (const p of purchases) {

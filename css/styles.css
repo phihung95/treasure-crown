@@ -131,7 +131,26 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .stat { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:11px 13px; box-shadow:var(--shadow);
   display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
 .stat-k { font-size:12.5px; color:var(--ink-3); font-weight:600; }
-.stat-v { font-size:17px; font-weight:800; letter-spacing:-.01em; }
+.stat-v { font-size:17px; font-weight:800; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.stat-v.pos { color:var(--pos); } .stat-v.neg { color:var(--neg); }
+@media (min-width:560px) { .stat-row { grid-template-columns:repeat(4,1fr); } }
+
+/* Business-value gain on the dark hero */
+.hero-gain.pos { color:var(--pos-dk); font-weight:700; }
+.hero-gain.neg { color:var(--neg-dk); font-weight:700; }
+
+/* Nudge card shown before the first sale */
+.hint-card { display:flex; flex-direction:column; gap:2px; text-decoration:none; margin:12px 0;
+  background:var(--surface); border:1px dashed var(--gold); border-radius:14px; padding:14px; box-shadow:var(--shadow); }
+.hint-k { font-weight:800; font-size:15px; color:var(--ink); }
+.hint-v { color:var(--gold-deep); font-size:13.5px; font-weight:600; }
+.hint-card:hover { background:#fbf6ea; }
+
+/* Dice-challenge toggle on the Sell screen */
+.dice-toggle { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0 2px; padding:12px 13px;
+  background:#fbf6ea; border:1px solid var(--gold); border-radius:11px; font-weight:800; cursor:pointer; }
+.dice-toggle input { width:auto; margin:0; accent-color:var(--gold-deep); transform:scale(1.2); }
+.dice-toggle .muted { font-weight:600; }
 
 /* Data panels + aligned money tables */
 .panel { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:6px 14px 12px; margin:12px 0; box-shadow:var(--shadow); }
@@ -144,6 +163,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .trow.lead .tname { color:var(--gold-deep); }
 .tbl.by-period .thd, .tbl.by-period .trow { grid-template-columns:1fr auto auto; }
 .tbl.by-cat .thd, .tbl.by-cat .trow { grid-template-columns:minmax(6.5em,1.4fr) auto auto; }
+.tbl.by-top .trow { grid-template-columns:1fr auto; }
+.tbl.by-top .chip { vertical-align:middle; }
 .tname { font-weight:700; min-width:0; }
 .tsub { display:block; font-size:12px; font-weight:600; color:var(--ink-3); margin-top:2px; white-space:nowrap; }
 .num { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
