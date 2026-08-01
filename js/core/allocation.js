@@ -10,6 +10,12 @@ export function suggestedOfferCents(lines, percent) {
   return pctOfCents(marketTotalCents(lines), percent);
 }
 
+// The items a purchase created (to remove when reversing/editing a buy).
+export function reversePurchase({ purchase, items }) {
+  const created = items.filter((i) => i.source_purchase_id === purchase.purchase_id);
+  return { itemDeletes: created.map((i) => i.item_id) };
+}
+
 export function allocatePurchase({ lot_total_cents, lines, method }) {
   if (method === 'per_item') {
     return {

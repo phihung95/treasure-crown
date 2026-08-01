@@ -1,4 +1,4 @@
-import { reconcileTrade, processTrade } from '../../core/trades.js';
+import { reconcileTrade, processTrade, reverseTrade } from '../../core/trades.js';
 import { pctOfCents } from '../../core/money.js';
 import { CATEGORIES } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel } from '../format.js';
@@ -13,14 +13,20 @@ const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><pat
 export async function render(root, ctx) {
   const stock = (await ctx.store.getAll('items')).filter((i) => i.quantity_on_hand > 0);
   const events = ctx.settings.events || [];
-  const currentShow = ctx.settings.current_show || events[0] || '';
-  const giveLines = []; // { item, quantity, agreed_value_cents }
-  const getLines = [];  // { fields:{name,category}, quantity, market_value_cents }
+  // "Edit trade" reverses the old trade and reloads both sides into the builder.
+  const pre = ctx.prefill && ctx.prefill.screen === 'trade' ? ctx.prefill : null;
+  if (pre) delete ctx.prefill;
+  const currentShow = pre ? pre.event : (ctx.settings.current_show || events[0] || '');
+  // { item, quantity, agreed_value_cents } — resolve give items from fresh stock
+  const giveLines = pre
+    ? pre.giveLines.map((g) => ({ item: stock.find((i) => i.item_id === g.item_id), quantity: g.quantity, agreed_value_cents: g.agreed_value_cents })).filter((l) => l.item)
+    : [];
+  const getLines = pre ? pre.getLines.map((g) => ({ fields: { ...g.fields }, quantity: g.quantity, market_value_cents: g.market_value_cents })) : [];
   let editingGet = -1;
-  let pct = Number(ctx.settings.buy_percent) || 80;
-  let cashOverridden = false;
-  let cashCents = 0;
-  let cashDir = 'customer_pays_me';
+  let pct = pre ? pre.pct : (Number(ctx.settings.buy_percent) || 80);
+  let cashOverridden = !!pre;
+  let cashCents = pre ? pre.cash_cents : 0;
+  let cashDir = pre ? pre.cash_direction : 'customer_pays_me';
 
   const credited = (l) => pctOfCents(l.market_value_cents || 0, pct); // per unit
   const giveTotal = () => giveLines.reduce((s, l) => s + (l.agreed_value_cents || 0) * (l.quantity || 1), 0);
@@ -80,9 +86,11 @@ export async function render(root, ctx) {
       <datalist id="events">${events.map((e) => `<option value="${esc(e)}">`).join('')}</datalist>
     </div>
 
+    <div id="recent-trades"></div>
+
     <div class="total-bar">
       <button class="btn secondary" style="width:auto;margin:0" id="present" disabled>Show customer</button>
-      <button class="btn" style="width:auto;margin:0" id="save" disabled>Save trade</button>
+      <button class="btn" style="width:auto;margin:0" id="save" disabled>${pre ? 'Save changes' : 'Save trade'}</button>
     </div>
   `;
 
@@ -254,5 +262,68 @@ export async function render(root, ctx) {
     location.hash = '#/inventory';
   };
 
+  // ---- Recent trades: edit (reverse + reload) or delete a whole trade ----
+  const [trades, allItems, allSales] = await Promise.all([
+    ctx.store.getAll('trades'), ctx.store.getAll('items'), ctx.store.getAll('sales'),
+  ]);
+  const recentTrades = trades.sort((a, b) => String(b.trade_id).localeCompare(String(a.trade_id))).slice(0, 8);
+  const soldItemIds = new Set(allSales.map((s) => s.item_id));
+  const receivedOf = (t) => allItems.filter((i) => i.source_trade_id === t.trade_id);
+  const tradeTouched = (t) => receivedOf(t).some((i) => soldItemIds.has(i.item_id)); // a received card was resold
+
+  const reverse = async (t) => {
+    const { itemUpdates, itemDeletes, saleDeletes } = reverseTrade({ trade: t, sales: allSales, items: allItems });
+    for (const it of itemUpdates) { await ctx.store.put('items', it); await ctx.sync.enqueue({ kind: 'put', tab: 'items', row: it }); }
+    for (const id of itemDeletes) { await ctx.store.remove('items', id); await ctx.sync.enqueue({ kind: 'delete', tab: 'items', id }); }
+    for (const id of saleDeletes) { await ctx.store.remove('sales', id); await ctx.sync.enqueue({ kind: 'delete', tab: 'sales', id }); }
+    await ctx.store.remove('trades', t.trade_id); await ctx.sync.enqueue({ kind: 'delete', tab: 'trades', id: t.trade_id });
+    await ctx.syncNow();
+  };
+
+  const renderRecentTrades = () => {
+    const box = $('#recent-trades');
+    if (!recentTrades.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="panel"><div class="panel-h">Recent trades</div>
+      ${recentTrades.map((t) => {
+        const touched = tradeTouched(t);
+        const cash = t.cash_cents ? ` · ${t.cash_direction === 'i_pay' ? 'paid' : 'took'} ${formatCents(t.cash_cents)}` : '';
+        return `<div class="sale-row">
+          <div class="sale-main">
+            <div class="sale-name">Trade · profit ${formatCents(t.trade_profit_cents || 0)}</div>
+            <div class="muted">${esc(t.date || '')}${t.event ? ` · ${esc(t.event)}` : ''}${cash}${touched ? ' · <span class="neg">received card sold</span>' : ''}</div>
+          </div>
+          ${touched ? '' : `<span class="row-actions">
+            <button class="btn ghost undo-btn" data-edittrade="${esc(t.trade_id)}">Edit</button>
+            <button class="btn ghost undo-btn" data-deltrade="${esc(t.trade_id)}">Delete</button>
+          </span>`}
+        </div>`;
+      }).join('')}</div>`;
+
+    box.querySelectorAll('[data-edittrade]').forEach((b) => { b.onclick = async () => {
+      const t = recentTrades.find((x) => x.trade_id === b.getAttribute('data-edittrade'));
+      const giveSales = allSales.filter((s) => s.trade_id === t.trade_id && s.type === 'trade_give');
+      const m = /credit (\d+)% of market/.exec(t.notes || '');
+      const usedPct = m ? +m[1] : (Number(ctx.settings.buy_percent) || 80);
+      ctx.prefill = {
+        screen: 'trade',
+        giveLines: giveSales.map((s) => ({ item_id: s.item_id, quantity: s.quantity, agreed_value_cents: s.unit_price_cents })),
+        getLines: receivedOf(t).map((i) => ({ fields: { name: i.name, category: i.category }, quantity: i.quantity_on_hand, market_value_cents: usedPct ? Math.round((i.unit_cost_cents * 100) / usedPct) : i.unit_cost_cents })),
+        pct: usedPct, cash_cents: t.cash_cents || 0, cash_direction: t.cash_direction || 'customer_pays_me', event: t.event,
+      };
+      await reverse(t);
+      ctx.toast('Editing trade — adjust, then Save changes');
+      ctx.refresh();
+    }; });
+    box.querySelectorAll('[data-deltrade]').forEach((b) => { b.onclick = async () => {
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Delete?'; b.classList.add('danger'); setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.textContent = 'Delete'; b.classList.remove('danger'); } }, 3000); return; }
+      const t = recentTrades.find((x) => x.trade_id === b.getAttribute('data-deltrade'));
+      await reverse(t);
+      ctx.toast('Trade deleted — inventory restored');
+      ctx.refresh();
+    }; });
+  };
+
   renderGive(); renderGet(); updateTotals();
+  if (pre) { $('#cash').value = (cashCents / 100).toFixed(2); $('#dir').value = cashDir; }
+  renderRecentTrades();
 }

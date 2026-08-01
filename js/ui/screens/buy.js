@@ -1,4 +1,4 @@
-import { allocatePurchase, marketTotalCents, suggestedOfferCents } from '../../core/allocation.js';
+import { allocatePurchase, marketTotalCents, suggestedOfferCents, reversePurchase } from '../../core/allocation.js';
 import { newItem, CATEGORIES, PAYMENT_METHODS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
 
@@ -12,12 +12,15 @@ const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><pat
 
 export async function render(root, ctx) {
   const events = ctx.settings.events || [];
-  const currentShow = ctx.settings.current_show || events[0] || '';
-  const lines = [];
+  // "Edit buy" reverses the old lot and drops its cards back into the builder.
+  const pre = ctx.prefill && ctx.prefill.screen === 'buy' ? ctx.prefill : null;
+  if (pre) delete ctx.prefill;
+  const currentShow = pre ? pre.event : (ctx.settings.current_show || events[0] || '');
+  const lines = pre ? pre.lines.map((l) => ({ ...l })) : [];
   let editing = -1;
   let pct = Number(ctx.settings.buy_percent) || 80;
-  let overridden = false;
-  let finalCents = 0;
+  let overridden = !!pre;
+  let finalCents = pre ? pre.finalCents : 0;
 
   const marketTotal = () => marketTotalCents(lines);
   const suggested = () => suggestedOfferCents(lines, pct);
@@ -66,13 +69,16 @@ export async function render(root, ctx) {
       </div>
     </div>
 
+    <div id="recent-buys"></div>
+
     <div class="total-bar">
       <button class="btn secondary" style="width:auto;margin:0" id="present" disabled>Show customer</button>
-      <button class="btn" style="width:auto;margin:0" id="save" disabled>Record buy</button>
+      <button class="btn" style="width:auto;margin:0" id="save" disabled>${pre ? 'Save changes' : 'Record buy'}</button>
     </div>
   `;
 
   const $ = (s) => root.querySelector(s);
+  if (pre && pre.payment_method) $('#pay').value = pre.payment_method;
 
   const renderLines = () => {
     $('#lines').innerHTML = lines.map((l, i) => {
@@ -206,5 +212,58 @@ export async function render(root, ctx) {
     location.hash = '#/inventory';
   };
 
+  // ---- Recent buys: edit (reverse + reload into builder) or delete a whole lot ----
+  const [purchases, allItems, allSales] = await Promise.all([
+    ctx.store.getAll('purchases'), ctx.store.getAll('items'), ctx.store.getAll('sales'),
+  ]);
+  const recentBuys = purchases.sort((a, b) => String(b.purchase_id).localeCompare(String(a.purchase_id))).slice(0, 8);
+  const soldItemIds = new Set(allSales.map((s) => s.item_id));
+  const lotItems = (p) => allItems.filter((i) => i.source_purchase_id === p.purchase_id);
+  const lotSold = (p) => lotItems(p).some((i) => soldItemIds.has(i.item_id));
+
+  const reverseBuy = async (p) => {
+    const { itemDeletes } = reversePurchase({ purchase: p, items: allItems });
+    for (const id of itemDeletes) { await ctx.store.remove('items', id); await ctx.sync.enqueue({ kind: 'delete', tab: 'items', id }); }
+    await ctx.store.remove('purchases', p.purchase_id); await ctx.sync.enqueue({ kind: 'delete', tab: 'purchases', id: p.purchase_id });
+    await ctx.syncNow();
+  };
+
+  const renderRecentBuys = () => {
+    const box = $('#recent-buys');
+    if (!recentBuys.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="panel"><div class="panel-h">Recent buys</div>
+      ${recentBuys.map((p) => {
+        const sold = lotSold(p);
+        return `<div class="sale-row">
+          <div class="sale-main">
+            <div class="sale-name">${p.item_count} card${p.item_count === 1 ? '' : 's'} · ${formatCents(p.lot_total_cents)}</div>
+            <div class="muted">${esc(p.date || '')}${p.event ? ` · ${esc(p.event)}` : ''}${sold ? ' · <span class="neg">has sold cards</span>' : ''}</div>
+          </div>
+          ${sold ? '' : `<span class="row-actions">
+            <button class="btn ghost undo-btn" data-editbuy="${esc(p.purchase_id)}">Edit</button>
+            <button class="btn ghost undo-btn" data-delbuy="${esc(p.purchase_id)}">Delete</button>
+          </span>`}
+        </div>`;
+      }).join('')}</div>`;
+
+    box.querySelectorAll('[data-editbuy]').forEach((b) => { b.onclick = async () => {
+      const p = recentBuys.find((x) => x.purchase_id === b.getAttribute('data-editbuy'));
+      const preLines = lotItems(p).map((i) => ({ name: i.name, category: i.category, quantity: i.quantity_on_hand, market_value_cents: i.market_value_cents }));
+      await reverseBuy(p);
+      ctx.prefill = { screen: 'buy', lines: preLines, finalCents: p.lot_total_cents, event: p.event, payment_method: p.payment_method };
+      ctx.toast('Editing buy — adjust, then Save changes');
+      ctx.refresh();
+    }; });
+    box.querySelectorAll('[data-delbuy]').forEach((b) => { b.onclick = async () => {
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Delete?'; b.classList.add('danger'); setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.textContent = 'Delete'; b.classList.remove('danger'); } }, 3000); return; }
+      const p = recentBuys.find((x) => x.purchase_id === b.getAttribute('data-delbuy'));
+      await reverseBuy(p);
+      ctx.toast('Buy deleted — cards removed');
+      ctx.refresh();
+    }; });
+  };
+
   refresh();
+  renderRecentBuys();
+  if (pre) $('#final').value = (finalCents / 100).toFixed(2);
 }

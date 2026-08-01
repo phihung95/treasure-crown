@@ -1,5 +1,23 @@
 import { decrement } from './inventory.js';
-import { newItem } from './schema.js';
+import { newItem, deriveStatus } from './schema.js';
+
+// Compute how to reverse a trade: put the given cards back on the shelf, and
+// list the received items + give-sale rows to delete. The trade row itself is
+// deleted by the caller. Does not check reversibility — the caller guards that
+// none of the received items were already sold.
+export function reverseTrade({ trade, sales, items }) {
+  const giveSales = sales.filter((s) => s.trade_id === trade.trade_id && s.type === 'trade_give');
+  const received = items.filter((i) => i.source_trade_id === trade.trade_id);
+  const itemUpdates = [];
+  for (const gs of giveSales) {
+    const it = items.find((i) => i.item_id === gs.item_id);
+    if (it) {
+      const q = (it.quantity_on_hand || 0) + (gs.quantity || 0);
+      itemUpdates.push({ ...it, quantity_on_hand: q, status: deriveStatus(q) });
+    }
+  }
+  return { itemUpdates, itemDeletes: received.map((i) => i.item_id), saleDeletes: giveSales.map((s) => s.txn_id) };
+}
 
 export function reconcileTrade({ giveLines, getLines, cash_cents, cash_direction }) {
   const give_total_cents = giveLines.reduce((s, l) => s + l.agreed_value_cents * l.quantity, 0);
