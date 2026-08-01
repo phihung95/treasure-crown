@@ -159,6 +159,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .sale-name { font-weight:700; }
 .undo-btn { width:auto; margin:0; padding:8px 15px; flex:none; }
 .undo-btn.danger { color:#fff; background:var(--neg); border-color:var(--neg); font-weight:800; }
+.sale-row.editing { display:block; padding:12px 0; }
+.sale-del { width:100%; margin-top:8px; color:var(--neg); border-color:#f2ccc5; }
+.sale-del.danger { background:var(--neg); color:#fff; border-color:var(--neg); font-weight:800; }
 
 /* Data panels + aligned money tables */
 .panel { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:6px 14px 12px; margin:12px 0; box-shadow:var(--shadow); }

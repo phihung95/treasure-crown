@@ -41,16 +41,7 @@ export async function render(root, ctx) {
       <datalist id="events">${events.map((e) => `<option value="${e}">`).join('')}</datalist>
       <button class="btn" id="do">Record sale</button>
     </div>
-    ${recent.length ? `<div class="panel" id="recent">
-      <div class="panel-h">Recent sales</div>
-      ${recent.map((s) => `<div class="sale-row">
-        <div class="sale-main">
-          <div class="sale-name">${esc(s.item_name || s.item_id)}${s.channel === 'dice' ? ' <span class="chip">🎲 dice</span>' : ''}</div>
-          <div class="muted">×${s.quantity} · ${formatCents(s.unit_price_cents)}${s.event ? ` · ${esc(s.event)}` : ''}</div>
-        </div>
-        <button class="btn ghost undo-btn" data-undo="${esc(s.txn_id)}">Undo</button>
-      </div>`).join('')}
-    </div>` : ''}
+    <div id="recent"></div>
   `;
 
   const renderResults = () => {
@@ -106,24 +97,86 @@ export async function render(root, ctx) {
     ctx.refresh();
   };
 
-  // Undo a sale: one tap arms (3s), a second tap voids it and restores stock.
-  const voidTxn = async (txn_id) => {
-    const sale = recent.find((s) => s.txn_id === txn_id);
-    if (!sale) return;
-    const item = (await ctx.store.getAll('items')).find((i) => i.item_id === sale.item_id);
-    const { updatedItem } = voidSale(sale, item);
-    if (updatedItem) await save(ctx, 'items', updatedItem); // enqueues a stock put
-    await ctx.store.remove('sales', sale.txn_id);
-    await ctx.sync.enqueue({ kind: 'delete', tab: 'sales', id: sale.txn_id });
-    await ctx.syncNow();
-    ctx.toast('Sale voided — stock restored');
-    ctx.refresh();
-  };
-  root.querySelectorAll('[data-undo]').forEach((b) => {
-    b.onclick = () => {
-      if (b.dataset.armed) { voidTxn(b.getAttribute('data-undo')); return; }
-      b.dataset.armed = '1'; b.textContent = 'Void?'; b.classList.add('danger');
-      setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.textContent = 'Undo'; b.classList.remove('danger'); } }, 3000);
+  // ---- Recent sales: edit price/qty/payment/show or delete, with stock kept in sync ----
+  let editingSale = null; // txn_id being edited
+
+  const displayRow = (s) => `<div class="sale-row">
+    <div class="sale-main">
+      <div class="sale-name">${esc(s.item_name || s.item_id)}${s.channel === 'dice' ? ' <span class="chip">🎲 dice</span>' : ''}</div>
+      <div class="muted">×${s.quantity} · ${formatCents(s.unit_price_cents)}${s.event ? ` · ${esc(s.event)}` : ''}</div>
+    </div>
+    <button class="btn ghost undo-btn" data-editsale="${esc(s.txn_id)}">Edit</button>
+  </div>`;
+
+  const editRow = (s) => `<div class="sale-row editing">
+    <div class="edit-grid">
+      <div class="sale-name">${esc(s.item_name || s.item_id)}</div>
+      <div class="row">
+        <div><label>Qty</label><input data-eq inputmode="numeric" value="${s.quantity}" /></div>
+        <div><label>Price $ (each)</label><input data-ep inputmode="decimal" value="${(s.unit_price_cents / 100).toFixed(2)}" /></div>
+      </div>
+      <label>Payment</label>
+      <select data-epay>${PAYMENT_METHODS.map((p) => `<option value="${p}" ${p === s.payment_method ? 'selected' : ''}>${payLabel(p)}</option>`).join('')}</select>
+      <label>Show / event</label>
+      <input data-eev list="events" value="${esc(s.event || '')}" />
+      <label class="dice-toggle"><input type="checkbox" data-edice ${s.channel === 'dice' ? 'checked' : ''} />
+        <span>🎲 Dice challenge</span></label>
+      <div class="row">
+        <button class="btn secondary" data-savesale="${esc(s.txn_id)}">Save changes</button>
+        <button class="btn ghost" data-canceledit>Cancel</button>
+      </div>
+      <button class="btn ghost sale-del" data-delsale="${esc(s.txn_id)}">Delete sale</button>
+    </div>
+  </div>`;
+
+  const renderRecent = () => {
+    const box = root.querySelector('#recent');
+    if (!recent.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="panel"><div class="panel-h">Recent sales</div>
+      ${recent.map((s) => (s.txn_id === editingSale ? editRow(s) : displayRow(s))).join('')}</div>`;
+
+    box.querySelectorAll('[data-editsale]').forEach((b) => { b.onclick = () => { editingSale = b.getAttribute('data-editsale'); renderRecent(); }; });
+    const cancel = box.querySelector('[data-canceledit]');
+    if (cancel) cancel.onclick = () => { editingSale = null; renderRecent(); };
+
+    const saveBtn = box.querySelector('[data-savesale]');
+    if (saveBtn) saveBtn.onclick = async () => {
+      const sale = recent.find((s) => s.txn_id === saveBtn.getAttribute('data-savesale'));
+      const item = (await ctx.store.getAll('items')).find((i) => i.item_id === sale.item_id);
+      let updatedSale; let updatedItem;
+      try {
+        ({ updatedSale, updatedItem } = editSale(sale, item, {
+          quantity: parseInt(box.querySelector('[data-eq]').value, 10),
+          unit_price_cents: dollarsToCents(box.querySelector('[data-ep]').value),
+          payment_method: box.querySelector('[data-epay]').value,
+          event: box.querySelector('[data-eev]').value.trim(),
+          channel: box.querySelector('[data-edice]').checked ? 'dice' : '',
+        }));
+      } catch (e) { ctx.toast(e.message); return; }
+      if (updatedItem) await save(ctx, 'items', updatedItem);
+      await save(ctx, 'sales', updatedSale);
+      await ctx.syncNow();
+      ctx.toast('Sale updated');
+      ctx.refresh();
     };
-  });
+
+    const delBtn = box.querySelector('[data-delsale]');
+    if (delBtn) delBtn.onclick = async () => {
+      if (!delBtn.dataset.armed) {
+        delBtn.dataset.armed = '1'; delBtn.textContent = 'Tap again to delete'; delBtn.classList.add('danger');
+        setTimeout(() => { if (delBtn.isConnected && delBtn.dataset.armed) { delete delBtn.dataset.armed; delBtn.textContent = 'Delete sale'; delBtn.classList.remove('danger'); } }, 3000);
+        return;
+      }
+      const sale = recent.find((s) => s.txn_id === delBtn.getAttribute('data-delsale'));
+      const item = (await ctx.store.getAll('items')).find((i) => i.item_id === sale.item_id);
+      const { updatedItem } = voidSale(sale, item);
+      if (updatedItem) await save(ctx, 'items', updatedItem);
+      await ctx.store.remove('sales', sale.txn_id);
+      await ctx.sync.enqueue({ kind: 'delete', tab: 'sales', id: sale.txn_id });
+      await ctx.syncNow();
+      ctx.toast('Sale deleted — stock restored');
+      ctx.refresh();
+    };
+  };
+  renderRecent();
 }
