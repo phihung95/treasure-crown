@@ -1,6 +1,7 @@
 import { bookSale, voidSale } from '../../core/sales.js';
 import { PAYMENT_METHODS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
+import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
 
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
@@ -68,10 +69,31 @@ export async function render(root, ctx) {
     root.querySelector('#sel').innerHTML = `<strong>${selected.name}</strong>
       <div class="muted">on hand x${selected.quantity_on_hand} · cost ${formatCents(selected.unit_cost_cents)}</div>`;
     setPrice();
+    snapshot();
+  };
+
+  const $ = (s) => root.querySelector(s);
+  // Auto-save the in-progress sale so a reload/crash mid-entry doesn't lose it.
+  const snapshot = () => {
+    if (selected) saveDraft(ctx.store, 'sell', { item_id: selected.item_id, qty: $('#qty').value, price: $('#price').value, dice: isDice(), pay: $('#pay').value, event: $('#event').value });
+    else clearDraft(ctx.store, 'sell');
   };
 
   root.querySelector('#q').oninput = renderResults;
-  root.querySelector('#dice').onchange = setPrice;
+  root.querySelector('#dice').onchange = () => { setPrice(); snapshot(); };
+  ['#qty', '#price', '#event'].forEach((s) => $(s).addEventListener('input', snapshot));
+  $('#pay').addEventListener('change', snapshot);
+
+  // Restore a draft sale if its item is still in stock.
+  const draft = await loadDraft(ctx.store, 'sell');
+  if (draft && items.some((i) => i.item_id === draft.item_id)) {
+    pick(draft.item_id);
+    $('#dice').checked = !!draft.dice;
+    $('#qty').value = draft.qty ?? '1';
+    $('#price').value = draft.price ?? $('#price').value;
+    if (draft.pay) $('#pay').value = draft.pay;
+    if (draft.event != null) $('#event').value = draft.event;
+  }
 
   root.querySelector('#do').onclick = async () => {
     if (!selected) return;
@@ -91,6 +113,7 @@ export async function render(root, ctx) {
     } catch (e) { ctx.toast(e.message); return; }
     await save(ctx, 'items', result.updatedItem);
     await save(ctx, 'sales', result.saleRow);
+    await clearDraft(ctx.store, 'sell');
     await ctx.setCurrentShow(result.saleRow.event);
     await ctx.syncNow();
     ctx.toast(`Sold — profit ${formatCents(result.saleRow.profit_cents)}`);

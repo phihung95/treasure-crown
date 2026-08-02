@@ -1,6 +1,7 @@
 import { allocatePurchase, marketTotalCents, suggestedOfferCents, reversePurchase } from '../../core/allocation.js';
 import { newItem, CATEGORIES, PAYMENT_METHODS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
+import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
 
 async function save(ctx, tab, row) {
   await ctx.store.put(tab, row);
@@ -15,12 +16,21 @@ export async function render(root, ctx) {
   // "Edit buy" reverses the old lot and drops its cards back into the builder.
   const pre = ctx.prefill && ctx.prefill.screen === 'buy' ? ctx.prefill : null;
   if (pre) delete ctx.prefill;
-  const currentShow = pre ? pre.event : (ctx.settings.current_show || events[0] || '');
-  const lines = pre ? pre.lines.map((l) => ({ ...l })) : [];
+  // Restore an auto-saved draft when we're not editing an existing buy.
+  const draft = pre ? null : await loadDraft(ctx.store, 'buy');
+  const seed = pre || draft;
+  const currentShow = seed && seed.event != null ? seed.event : (ctx.settings.current_show || events[0] || '');
+  const lines = seed && seed.lines ? seed.lines.map((l) => ({ ...l })) : [];
   let editing = -1;
-  let pct = Number(ctx.settings.buy_percent) || 80;
-  let overridden = !!pre;
-  let finalCents = pre ? pre.finalCents : 0;
+  let pct = seed && seed.pct != null ? seed.pct : (Number(ctx.settings.buy_percent) || 80);
+  let overridden = seed ? !!seed.overridden : false;
+  let finalCents = seed && seed.finalCents != null ? seed.finalCents : 0;
+  const seedPay = seed ? seed.payment : null;
+
+  const snapshot = () => {
+    if (lines.length) saveDraft(ctx.store, 'buy', { lines, pct, overridden, finalCents, event: root.querySelector('#event') ? root.querySelector('#event').value : currentShow, payment: root.querySelector('#pay') ? root.querySelector('#pay').value : '' });
+    else clearDraft(ctx.store, 'buy');
+  };
 
   const marketTotal = () => marketTotalCents(lines);
   const suggested = () => suggestedOfferCents(lines, pct);
@@ -79,6 +89,7 @@ export async function render(root, ctx) {
 
   const $ = (s) => root.querySelector(s);
   if (pre && pre.payment_method) $('#pay').value = pre.payment_method;
+  else if (seedPay) $('#pay').value = seedPay;
 
   const renderLines = () => {
     $('#lines').innerHTML = lines.map((l, i) => {
@@ -133,6 +144,7 @@ export async function render(root, ctx) {
     if (!overridden) { finalCents = suggested(); $('#final').value = (finalCents / 100).toFixed(2); }
     $('#o-reset').hidden = !overridden;
     $('#o-reset').textContent = `· reset to ${pct}%`;
+    snapshot();
   };
 
   $('#add-line').onclick = () => {
@@ -154,8 +166,10 @@ export async function render(root, ctx) {
   $('#pct').oninput = () => setPct(parseInt($('#pct').value, 10));
   $('#pct-up').onclick = () => setPct(pct + 5);
   $('#pct-dn').onclick = () => setPct(pct - 5);
-  $('#final').oninput = () => { overridden = true; finalCents = dollarsToCents($('#final').value); $('#o-reset').hidden = false; };
+  $('#final').oninput = () => { overridden = true; finalCents = dollarsToCents($('#final').value); $('#o-reset').hidden = false; snapshot(); };
   $('#o-reset').onclick = () => { overridden = false; refresh(); };
+  $('#event').addEventListener('input', snapshot);
+  $('#pay').addEventListener('change', snapshot);
 
   // ---- Customer-facing present mode (transparent: shows everything incl. the %) ----
   $('#present').onclick = () => {
@@ -207,6 +221,7 @@ export async function render(root, ctx) {
       notes: `offer ${pct}% of market ${formatCents(marketTotal())}${res.fallback ? ' (even split — missing values)' : ''}`,
     });
     await ctx.sync.commitIds();
+    await clearDraft(ctx.store, 'buy');
     await ctx.setCurrentShow(event);
     await ctx.syncNow();
     ctx.toast(`Bought ${res.lines.length} card(s) for ${formatCents(finalCents)}`);
@@ -266,5 +281,5 @@ export async function render(root, ctx) {
 
   refresh();
   renderRecentBuys();
-  if (pre) $('#final').value = (finalCents / 100).toFixed(2);
+  if (overridden) $('#final').value = (finalCents / 100).toFixed(2);
 }

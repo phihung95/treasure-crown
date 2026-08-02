@@ -2,6 +2,7 @@ import { reconcileTrade, processTrade, reverseTrade } from '../../core/trades.js
 import { pctOfCents } from '../../core/money.js';
 import { CATEGORIES } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel } from '../format.js';
+import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
 
 async function save(ctx, tab, row) {
   await ctx.store.put(tab, row);
@@ -16,17 +17,21 @@ export async function render(root, ctx) {
   // "Edit trade" reverses the old trade and reloads both sides into the builder.
   const pre = ctx.prefill && ctx.prefill.screen === 'trade' ? ctx.prefill : null;
   if (pre) delete ctx.prefill;
-  const currentShow = pre ? pre.event : (ctx.settings.current_show || events[0] || '');
+  // Restore an auto-saved draft when we're not editing an existing trade. Draft
+  // and edit-prefill share the same shape.
+  const draft = pre ? null : await loadDraft(ctx.store, 'trade');
+  const seed = pre || draft;
+  const currentShow = seed && seed.event != null ? seed.event : (ctx.settings.current_show || events[0] || '');
   // { item, quantity, agreed_value_cents } — resolve give items from fresh stock
-  const giveLines = pre
-    ? pre.giveLines.map((g) => ({ item: stock.find((i) => i.item_id === g.item_id), quantity: g.quantity, agreed_value_cents: g.agreed_value_cents })).filter((l) => l.item)
+  const giveLines = seed
+    ? seed.giveLines.map((g) => ({ item: stock.find((i) => i.item_id === g.item_id), quantity: g.quantity, agreed_value_cents: g.agreed_value_cents })).filter((l) => l.item)
     : [];
-  const getLines = pre ? pre.getLines.map((g) => ({ fields: { ...g.fields }, quantity: g.quantity, market_value_cents: g.market_value_cents })) : [];
+  const getLines = seed ? seed.getLines.map((g) => ({ fields: { ...g.fields }, quantity: g.quantity, market_value_cents: g.market_value_cents })) : [];
   let editingGet = -1;
-  let pct = pre ? pre.pct : (Number(ctx.settings.buy_percent) || 80);
-  let cashOverridden = !!pre;
-  let cashCents = pre ? pre.cash_cents : 0;
-  let cashDir = pre ? pre.cash_direction : 'customer_pays_me';
+  let pct = seed ? seed.pct : (Number(ctx.settings.buy_percent) || 80);
+  let cashOverridden = !!seed;
+  let cashCents = seed ? seed.cash_cents : 0;
+  let cashDir = seed ? seed.cash_direction : 'customer_pays_me';
 
   const credited = (l) => pctOfCents(l.market_value_cents || 0, pct); // per unit
   const giveTotal = () => giveLines.reduce((s, l) => s + (l.agreed_value_cents || 0) * (l.quantity || 1), 0);
@@ -95,6 +100,17 @@ export async function render(root, ctx) {
   `;
 
   const $ = (s) => root.querySelector(s);
+
+  // Auto-save the in-progress trade so a reload/crash mid-entry doesn't lose it.
+  const snapshot = () => {
+    if (giveLines.length || getLines.length) {
+      saveDraft(ctx.store, 'trade', {
+        giveLines: giveLines.map((l) => ({ item_id: l.item.item_id, quantity: l.quantity, agreed_value_cents: l.agreed_value_cents })),
+        getLines: getLines.map((l) => ({ fields: l.fields, quantity: l.quantity, market_value_cents: l.market_value_cents })),
+        pct, cash_cents: cashCents, cash_direction: cashDir, event: $('#event') ? $('#event').value : currentShow,
+      });
+    } else clearDraft(ctx.store, 'trade');
+  };
 
   const renderGive = () => {
     $('#give').innerHTML = giveLines.map((l, i) => `
@@ -168,6 +184,7 @@ export async function render(root, ctx) {
     if (r.delta_cents === 0) { net.textContent = 'Balanced — even trade'; net.className = 'bal-net even'; }
     else if (r.delta_cents > 0) { net.textContent = `In your favor by ${formatCents(r.delta_cents)}`; net.className = 'bal-net pos'; }
     else { net.textContent = `In their favor by ${formatCents(-r.delta_cents)}`; net.className = 'bal-net neg'; }
+    snapshot();
   };
 
   // ---- give side: search stock, add with editable value (default = market) ----
@@ -206,6 +223,7 @@ export async function render(root, ctx) {
   $('#tpct-dn').onclick = () => setPct(pct - 5);
   $('#cash').oninput = () => { cashOverridden = true; cashCents = dollarsToCents($('#cash').value); updateTotals(); };
   $('#dir').onchange = () => { cashOverridden = true; cashDir = $('#dir').value; updateTotals(); };
+  $('#event').addEventListener('input', snapshot);
 
   // ---- customer-facing present view ----
   $('#present').onclick = () => {
@@ -257,6 +275,7 @@ export async function render(root, ctx) {
     for (const sr of res.saleRows) await save(ctx, 'sales', sr);
     for (const u of res.updatedItems) await save(ctx, 'items', u);
     for (const n of res.newItems) await save(ctx, 'items', n);
+    await clearDraft(ctx.store, 'trade');
     await ctx.setCurrentShow(res.tradeRow.event);
     await ctx.syncNow();
     ctx.toast(`Trade saved — profit ${formatCents(res.tradeRow.trade_profit_cents)}`);
@@ -325,6 +344,6 @@ export async function render(root, ctx) {
   };
 
   renderGive(); renderGet(); updateTotals();
-  if (pre) { $('#cash').value = (cashCents / 100).toFixed(2); $('#dir').value = cashDir; }
+  if (cashOverridden) { $('#cash').value = (cashCents / 100).toFixed(2); $('#dir').value = cashDir; }
   renderRecentTrades();
 }
