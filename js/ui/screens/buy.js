@@ -1,5 +1,5 @@
 import { allocatePurchase, marketTotalCents, suggestedOfferCents, reversePurchase } from '../../core/allocation.js';
-import { newItem, CATEGORIES, PAYMENT_METHODS } from '../../core/schema.js';
+import { newItem, CATEGORIES, PAYMENT_METHODS, CONDITIONS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
 import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
 
@@ -43,10 +43,16 @@ export async function render(root, ctx) {
       <label>Add a card the customer is selling</label>
       <input id="l-name" placeholder="Umbreon VMAX Alt Art" autocomplete="off" />
       <div class="row">
+        <div><label>Set</label><input id="l-set" placeholder="Evolving Skies" autocomplete="off" /></div>
+        <div><label>Card #</label><input id="l-num" placeholder="215/203" autocomplete="off" /></div>
+      </div>
+      <div class="row">
         <div><label>Category</label>
           <select id="l-cat">${CATEGORIES.map((c) => `<option value="${c}">${catLabel(c)}</option>`).join('')}</select></div>
+        <div><label>Condition</label>
+          <select id="l-cond"><option value="">—</option>${CONDITIONS.map((c) => `<option value="${c}">${c}</option>`).join('')}</select></div>
         <div><label>Qty</label><input id="l-qty" inputmode="numeric" value="1" /></div>
-        <div><label>Market value $ (each)</label><input id="l-mv" inputmode="decimal" value="" placeholder="0.00" /></div>
+        <div><label>Market $ (each)</label><input id="l-mv" inputmode="decimal" value="" placeholder="0.00" /></div>
       </div>
       <button class="btn secondary" id="add-line">Add card</button>
     </div>
@@ -102,14 +108,20 @@ export async function render(root, ctx) {
           <div class="edit-grid">
             <input class="edit-name" data-en="${i}" value="${esc(l.name)}" aria-label="name" />
             <div class="row">
+              <input data-eset="${i}" value="${esc(l.set || '')}" placeholder="Set" aria-label="set" />
+              <input data-enum="${i}" value="${esc(l.card_number || '')}" placeholder="Card #" aria-label="card number" />
+            </div>
+            <div class="row">
               <select data-ec="${i}" aria-label="category">${CATEGORIES.map((c) => `<option value="${c}" ${c === l.category ? 'selected' : ''}>${catLabel(c)}</option>`).join('')}</select>
+              <select data-econd="${i}" aria-label="condition"><option value="">—</option>${CONDITIONS.map((c) => `<option value="${c}" ${c === l.condition ? 'selected' : ''}>${c}</option>`).join('')}</select>
               <input data-eq="${i}" inputmode="numeric" value="${l.quantity}" aria-label="qty" />
               <input data-em="${i}" inputmode="decimal" value="${(l.market_value_cents / 100).toFixed(2)}" aria-label="market value each" />
             </div>
             <button class="btn secondary edit-done" data-done="${i}">Done</button>
           </div></div>`;
       }
-      return `<div class="list-item"><span>${esc(l.name)} <span class="chip">${catLabel(l.category)}</span>
+      const meta = [l.set, l.card_number ? `#${l.card_number}` : '', l.condition].filter(Boolean).join(' · ');
+      return `<div class="list-item"><span>${esc(l.name)} <span class="chip">${catLabel(l.category)}</span>${meta ? `<span class="inv-attr">${esc(meta)}</span>` : ''}
         <div class="muted">${l.quantity > 1 ? `×${l.quantity} · ` : ''}mkt ${formatCents(l.market_value_cents)}${l.quantity > 1 ? ` = ${formatCents(l.market_value_cents * l.quantity)}` : ''}</div></span>
         <span class="row-actions">
           <button class="btn ghost row-btn" data-edit="${i}" aria-label="edit">✎</button>
@@ -121,6 +133,9 @@ export async function render(root, ctx) {
       const i = +b.getAttribute('data-done');
       lines[i] = {
         name: $(`[data-en="${i}"]`).value.trim() || lines[i].name,
+        set: $(`[data-eset="${i}"]`).value.trim(),
+        card_number: $(`[data-enum="${i}"]`).value.trim(),
+        condition: $(`[data-econd="${i}"]`).value,
         category: $(`[data-ec="${i}"]`).value,
         quantity: parseInt($(`[data-eq="${i}"]`).value, 10) || 1,
         market_value_cents: dollarsToCents($(`[data-em="${i}"]`).value),
@@ -156,11 +171,14 @@ export async function render(root, ctx) {
     if (!name) { ctx.toast('Card name required'); return; }
     lines.push({
       name,
+      set: $('#l-set').value.trim(),
+      card_number: $('#l-num').value.trim(),
+      condition: $('#l-cond').value,
       category: $('#l-cat').value,
       quantity: parseInt($('#l-qty').value, 10) || 1,
       market_value_cents: dollarsToCents($('#l-mv').value),
     });
-    $('#l-name').value = ''; $('#l-qty').value = '1'; $('#l-mv').value = '';
+    $('#l-name').value = ''; $('#l-set').value = ''; $('#l-num').value = ''; $('#l-cond').value = ''; $('#l-qty').value = '1'; $('#l-mv').value = '';
     $('#l-name').focus();
     refresh();
   };
@@ -214,7 +232,8 @@ export async function render(root, ctx) {
 
     for (const l of res.lines) {
       const item = newItem({
-        category: l.category, name: l.name, quantity_on_hand: l.quantity,
+        category: l.category, name: l.name, set: l.set || '', card_number: l.card_number || '', condition: l.condition || '',
+        quantity_on_hand: l.quantity,
         unit_cost_cents: l.unit_cost_cents, market_value_cents: l.market_value_cents || 0,
         acquisition: 'bought', source_purchase_id: purchase_id, acquired_date: when,
       }, ids.item());
@@ -280,7 +299,7 @@ export async function render(root, ctx) {
         return;
       }
       const p = recentBuys.find((x) => x.purchase_id === b.getAttribute('data-editbuy'));
-      const preLines = lotItems(p).map((i) => ({ name: i.name, category: i.category, quantity: i.quantity_on_hand, market_value_cents: i.market_value_cents }));
+      const preLines = lotItems(p).map((i) => ({ name: i.name, set: i.set, card_number: i.card_number, condition: i.condition, category: i.category, quantity: i.quantity_on_hand, market_value_cents: i.market_value_cents }));
       await reverseBuy(p);
       ctx.prefill = { screen: 'buy', lines: preLines, finalCents: p.lot_total_cents, event: p.event, payment_method: p.payment_method };
       ctx.toast('Editing buy — adjust, then Save changes');

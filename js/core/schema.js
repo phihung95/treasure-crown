@@ -1,5 +1,7 @@
 export const CATEGORIES = ['single', 'slab', 'sealed', 'print', 'other'];
 export const PAYMENT_METHODS = ['cash', 'zelle', 'venmo', 'cashapp'];
+// Raw-card conditions, near-mint to damaged. Blank = unspecified.
+export const CONDITIONS = ['NM', 'LP', 'MP', 'HP', 'DMG'];
 
 export function deriveStatus(quantity_on_hand) {
   return quantity_on_hand > 0 ? 'active' : 'depleted';

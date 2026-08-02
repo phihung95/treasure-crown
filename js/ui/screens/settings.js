@@ -1,9 +1,35 @@
 import { dollarsToCents, centsInputValue, formatCents } from '../format.js';
+import { toCsv } from '../../core/csv.js';
 
 async function save(ctx, tab, row) {
   await ctx.store.put(tab, row);
   await ctx.sync.enqueue({ kind: 'put', tab, row });
 }
+
+// Trigger a client-side file download (no server, works offline).
+function download(filename, text, type) {
+  const blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// Human-friendly inventory CSV: dollars (not cents), spreadsheet-ready columns.
+function inventoryCsv(items) {
+  const rows = items.map((i) => ({
+    item_id: i.item_id, category: i.category, name: i.name, set: i.set, card_number: i.card_number,
+    condition: i.condition, grade: i.grade, grader: i.grader, cert_number: i.cert_number, language: i.language,
+    quantity: i.quantity_on_hand,
+    unit_cost: ((i.unit_cost_cents || 0) / 100).toFixed(2),
+    market_value: ((i.market_value_cents || 0) / 100).toFixed(2),
+    acquisition: i.acquisition, acquired_date: i.acquired_date, status: i.status, notes: i.notes,
+  }));
+  return toCsv(rows);
+}
+
+const BACKUP_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments'];
 
 export async function render(root, ctx) {
   const s = ctx.settings;
@@ -41,6 +67,14 @@ export async function render(root, ctx) {
     </div>
 
     <div class="card">
+      <h1 style="font-size:16px">Export &amp; backup</h1>
+      <p class="muted" style="margin-bottom:8px">Download a copy of your data. Keep a backup so nothing's ever stuck on one device.</p>
+      <button class="btn secondary" id="exp-inv">⤓ Inventory (CSV)</button>
+      <button class="btn secondary" id="exp-sales">⤓ Sales &amp; trades (CSV)</button>
+      <button class="btn ghost" id="exp-all">⤓ Full backup (everything, JSON)</button>
+    </div>
+
+    <div class="card">
       <h1 style="font-size:16px">Filaments</h1>
       <div id="fil-list">${filaments.map((f) => `
         <div class="list-item"><span>${f.name} <span class="chip">${f.color || ''}</span></span>
@@ -64,6 +98,26 @@ export async function render(root, ctx) {
     });
     ctx.toast('Saved — reloading');
     setTimeout(() => location.reload(), 600);
+  };
+
+  const stamp = () => (s.current_date || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '') || 'export';
+  root.querySelector('#exp-inv').onclick = async () => {
+    const items = await ctx.store.getAll('items');
+    download(`treasure-crown-inventory-${stamp()}.csv`, inventoryCsv(items), 'text/csv;charset=utf-8');
+    ctx.toast(`Exported ${items.length} items`);
+  };
+  root.querySelector('#exp-sales').onclick = async () => {
+    const [sales, trades] = await Promise.all([ctx.store.getAll('sales'), ctx.store.getAll('trades')]);
+    const salesCsv = toCsv(sales.map((r) => ({ ...r, unit_price: ((r.unit_price_cents || 0) / 100).toFixed(2), revenue: ((r.revenue_cents || 0) / 100).toFixed(2), profit: ((r.profit_cents || 0) / 100).toFixed(2) })));
+    download(`treasure-crown-sales-${stamp()}.csv`, salesCsv, 'text/csv;charset=utf-8');
+    ctx.toast(`Exported ${sales.length} sales`);
+  };
+  root.querySelector('#exp-all').onclick = async () => {
+    const dump = { exported_at: stamp(), counters: (await ctx.store.getSettings()).counters || {} };
+    for (const tab of BACKUP_TABS) dump[tab] = await ctx.store.getAll(tab);
+    download(`treasure-crown-backup-${stamp()}.json`, JSON.stringify(dump, null, 2), 'application/json');
+    const total = BACKUP_TABS.reduce((n, t) => n + (dump[t] ? dump[t].length : 0), 0);
+    ctx.toast(`Backed up ${total} records`);
   };
 
   const signout = root.querySelector('#signout');
