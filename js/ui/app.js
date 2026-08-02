@@ -5,6 +5,15 @@ import { createAuth } from '../data/auth.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 
 const ROUTES = ['dashboard', 'shows', 'inventory', 'buy', 'sell', 'trade', 'prints', 'settings'];
+
+// On the hosted site, talk to Supabase through our OWN domain (/api proxy)
+// instead of supabase.co directly — some managed networks/MDM block the
+// supabase.co domain but allow our app's domain. On localhost dev there's no
+// proxy, so hit Supabase directly (that machine isn't blocked).
+const IS_LOCALHOST = ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname);
+function apiBaseFor(supaUrl) {
+  return IS_LOCALHOST ? supaUrl : `${location.origin}/api`;
+}
 const LOGIN_CROWN = `<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><defs><linearGradient id="lgc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6c565"/><stop offset="1" stop-color="#b8912f"/></linearGradient></defs><path fill="url(#lgc)" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#17130b"/></svg>`;
 const lgEsc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -46,7 +55,7 @@ function renderLogin(store, settings) {
         url = $('#lg-url').value.trim(); key = $('#lg-key').value.trim();
         await store.setSettings({ supabase_url: url, supabase_key: key });
       }
-      const auth = createAuth({ url, key, store });
+      const auth = createAuth({ url: apiBaseFor(url), key, store });
       await auth.signIn($('#lg-email').value.trim(), $('#lg-pass').value);
       location.reload();
     } catch (ex) {
@@ -73,8 +82,9 @@ async function boot() {
   // needs email + password. The anon key is safe to ship; RLS guards the data.
   const supaUrl = settings.supabase_url || SUPABASE_URL;
   const supaKey = settings.supabase_key || SUPABASE_ANON_KEY;
-  const auth = createAuth({ url: supaUrl, key: supaKey, store });
-  const api = createApi({ url: supaUrl, key: supaKey, getToken: () => auth.token() });
+  const base = apiBaseFor(supaUrl);
+  const auth = createAuth({ url: base, key: supaKey, store });
+  const api = createApi({ url: base, key: supaKey, getToken: () => auth.token() });
   const sync = createSync({ store, api });
 
   // The backend is always configured (built-in), so sign-in just needs the

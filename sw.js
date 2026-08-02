@@ -1,4 +1,4 @@
-const CACHE = 'tcc-v27';
+const CACHE = 'tcc-v28';
 const SHELL = [
   './', './index.html', './css/styles.css', './manifest.webmanifest',
   './js/ui/app.js', './js/ui/format.js', './js/config.js',
@@ -27,6 +27,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin || e.request.method !== 'GET') return;
+  // Never cache the Supabase proxy — always go to the network for live data.
+  if (url.pathname.startsWith('/api/')) return;
   e.respondWith((async () => {
     try {
       const fresh = await fetch(e.request);
