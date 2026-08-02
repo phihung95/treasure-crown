@@ -1,5 +1,31 @@
 import { decrement } from './inventory.js';
 import { deriveStatus } from './schema.js';
+import { allocateByWeights, splitEven } from './money.js';
+
+// Sell several items together for one bundle price. The price is split across
+// the lines weighted by market value × qty (even split if no line has a market
+// value), then each line is booked as its own sale (decrementing stock). Throws
+// if any line oversells. Returns the sale rows + updated items to persist.
+export function bookLotSale({ lines, lot_total_cents, payment_method, date, event, notes, channel }, ids) {
+  const weights = lines.map((l) => (l.item.market_value_cents || 0) * (l.quantity || 1));
+  let lineTotals;
+  if (weights.some((w) => w > 0)) {
+    lineTotals = allocateByWeights(lot_total_cents, weights);
+  } else {
+    const per = splitEven(lot_total_cents, lines.reduce((s, l) => s + (l.quantity || 1), 0));
+    let cur = 0; lineTotals = lines.map((l) => { let sum = 0; for (let u = 0; u < (l.quantity || 1); u += 1) { sum += per[cur]; cur += 1; } return sum; });
+  }
+  const saleRows = []; const updatedItems = [];
+  lines.forEach((l, i) => {
+    const qty = l.quantity || 1;
+    const { saleRow, updatedItem } = bookSale({
+      item: l.item, quantity: qty, unit_price_cents: Math.round(lineTotals[i] / qty),
+      payment_method, date, event, notes, channel,
+    }, ids.sale());
+    saleRows.push(saleRow); updatedItems.push(updatedItem);
+  });
+  return { saleRows, updatedItems };
+}
 
 export function bookSale({ item, quantity, unit_price_cents, payment_method, date, event, notes, channel }, txn_id) {
   const updatedItem = decrement(item, quantity);

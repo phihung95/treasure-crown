@@ -1,4 +1,4 @@
-import { bookSale, voidSale, bookCustomSale } from '../../core/sales.js';
+import { bookSale, voidSale, bookCustomSale, bookLotSale } from '../../core/sales.js';
 import { PAYMENT_METHODS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
 import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
@@ -15,6 +15,9 @@ export async function render(root, ctx) {
   const events = ctx.settings.events || [];
   const currentShow = ctx.settings.current_show || events[0] || '';
   let selected = null;
+  const lot = [];            // [{ item }] — cards in the current bundle
+  let lotMode = false;
+  let lotPriceEdited = false;
 
   // Most recent sales first (txn ids are monotonic), for quick undo.
   const recent = (await ctx.store.getAll('sales'))
@@ -24,8 +27,24 @@ export async function render(root, ctx) {
 
   root.innerHTML = `
     <h1>Sell</h1>
+    <label class="dice-toggle" id="lot-toggle"><input type="checkbox" id="lot-mode" />
+      <span>🧺 Sell several as a lot</span>
+      <span class="muted">— one bundle price, split across the cards</span></label>
     <input id="q" placeholder="Find item to sell…" />
     <div id="results"></div>
+    <section id="lot" hidden>
+      <div class="card" id="lot-cart"></div>
+      <label>Bundle price $ (total for all)</label>
+      <input id="lot-price" inputmode="decimal" value="0.00" />
+      <div class="muted" id="lot-split" style="margin:6px 0"></div>
+      <label>Payment</label>
+      <select id="lot-pay">${PAYMENT_METHODS.map((p) => `<option value="${p}">${payLabel(p)}</option>`).join('')}</select>
+      <label>Show / event</label>
+      <input id="lot-event" list="events" value="${currentShow}" placeholder="Type a show name…" />
+      <label>Notes (optional)</label>
+      <input id="lot-note" placeholder="e.g. bundle deal" autocomplete="off" />
+      <button class="btn" id="lot-do" disabled>Record lot sale</button>
+    </section>
     <div id="form" hidden>
       <div class="card" id="sel"></div>
       <div id="custom-fields" hidden>
@@ -57,6 +76,18 @@ export async function render(root, ctx) {
     const raw = root.querySelector('#q').value.trim();
     const q = raw.toLowerCase();
     const shown = q ? items.filter((i) => `${i.name} ${i.set} ${i.cert_number}`.toLowerCase().includes(q)).slice(0, 25) : [];
+    // Lot mode: tapping a result adds/removes it from the bundle cart.
+    if (lotMode) {
+      root.querySelector('#results').innerHTML = shown.map((i) => {
+        const inLot = lot.some((l) => l.item.item_id === i.item_id);
+        return `<div class="list-item${inLot ? ' lot-in' : ''}" data-lotadd="${i.item_id}">
+          <span>${i.name} <span class="chip">${catLabel(i.category)}</span>
+            <div class="muted">x${i.quantity_on_hand} · mkt ${formatCents(i.market_value_cents)}</div></span>
+          <span class="muted">${inLot ? '✓ in lot' : '＋ add'}</span></div>`;
+      }).join('');
+      root.querySelectorAll('[data-lotadd]').forEach((el) => { el.onclick = () => toggleLot(el.getAttribute('data-lotadd')); });
+      return;
+    }
     // Always offer a one-off sale for whatever's typed, in case it's not in inventory.
     const customRow = raw ? `<div class="list-item custom-pick" data-pickcustom="1">
       <span>＋ Record “<strong>${esc(raw)}</strong>” <span class="chip">not in inventory</span>
@@ -70,6 +101,34 @@ export async function render(root, ctx) {
     root.querySelectorAll('[data-pick]').forEach((el) => { el.onclick = () => pick(el.getAttribute('data-pick')); });
     const cp = root.querySelector('[data-pickcustom]');
     if (cp) cp.onclick = () => pickCustom(raw);
+  };
+
+  // ---- Lot / bundle sale: pick several cards, one price, split by market value ----
+  const lotMarketTotal = () => lot.reduce((s, l) => s + (l.item.market_value_cents || 0), 0);
+  const toggleLot = (id) => {
+    const at = lot.findIndex((l) => l.item.item_id === id);
+    if (at >= 0) lot.splice(at, 1);
+    else { const it = items.find((i) => i.item_id === id); if (it) lot.push({ item: it }); }
+    renderLot(); renderResults();
+  };
+  const renderLot = () => {
+    const cart = root.querySelector('#lot-cart');
+    const doBtn = root.querySelector('#lot-do');
+    if (!lot.length) {
+      cart.innerHTML = '<p class="muted">Search above and tap cards to add them to the lot.</p>';
+      root.querySelector('#lot-split').textContent = ''; doBtn.disabled = true; return;
+    }
+    cart.innerHTML = lot.map((l, i) => `<div class="sale-row">
+      <div class="sale-main"><div class="sale-name">${esc(l.item.name)}</div>
+        <div class="muted">mkt ${formatCents(l.item.market_value_cents)}</div></div>
+      <button class="btn ghost undo-btn" data-lotrm="${i}">Remove</button></div>`).join('');
+    root.querySelectorAll('[data-lotrm]').forEach((b) => { b.onclick = () => { lot.splice(+b.getAttribute('data-lotrm'), 1); renderLot(); renderResults(); }; });
+    if (!lotPriceEdited) root.querySelector('#lot-price').value = (lotMarketTotal() / 100).toFixed(2);
+    const price = dollarsToCents(root.querySelector('#lot-price').value);
+    const mkt = lotMarketTotal();
+    const vs = mkt > 0 ? ` · market total ${formatCents(mkt)} (${Math.round((price / mkt) * 100)}%)` : '';
+    root.querySelector('#lot-split').textContent = `${formatCents(price)} split across ${lot.length} card${lot.length === 1 ? '' : 's'} by value${vs}`;
+    doBtn.disabled = false;
   };
 
   const isDice = () => root.querySelector('#dice').checked;
@@ -115,6 +174,39 @@ export async function render(root, ctx) {
   root.querySelector('#dice').onchange = () => { setPrice(); snapshot(); };
   ['#qty', '#price', '#event', '#note', '#c-name', '#c-cost'].forEach((s) => $(s).addEventListener('input', snapshot));
   $('#pay').addEventListener('change', snapshot);
+
+  // Lot mode: toggle switches the search into "add to bundle" behavior.
+  $('#lot-mode').onchange = () => {
+    lotMode = $('#lot-mode').checked;
+    $('#lot').hidden = !lotMode;
+    $('#form').hidden = true; selected = null; // close any single-sale form
+    $('#q').value = '';
+    renderResults(); renderLot();
+  };
+  $('#lot-price').addEventListener('input', () => { lotPriceEdited = true; renderLot(); });
+  $('#lot-do').onclick = async () => {
+    if (!lot.length) return;
+    const price = dollarsToCents($('#lot-price').value);
+    if (price <= 0) { ctx.toast('Set a bundle price'); return; }
+    let result;
+    try {
+      const ids = await ctx.sync.makeIds();
+      result = bookLotSale({
+        lines: lot.map((l) => ({ item: l.item, quantity: 1 })),
+        lot_total_cents: price, payment_method: $('#lot-pay').value,
+        date: new Date().toISOString().slice(0, 10),
+        event: $('#lot-event').value.trim(), notes: $('#lot-note').value.trim(),
+      }, ids);
+      await ctx.sync.commitIds();
+    } catch (e) { ctx.toast(e.message); return; }
+    for (const u of result.updatedItems) await save(ctx, 'items', u);
+    for (const s of result.saleRows) await save(ctx, 'sales', s);
+    await ctx.setCurrentShow($('#lot-event').value.trim());
+    await ctx.syncNow();
+    const profit = result.saleRows.reduce((s, r) => s + r.profit_cents, 0);
+    ctx.toast(`Lot sold — ${result.saleRows.length} cards, profit ${formatCents(profit)}`);
+    ctx.refresh();
+  };
 
   // Restore a draft sale: a one-off, or an inventory item still in stock.
   const draft = await loadDraft(ctx.store, 'sell');
