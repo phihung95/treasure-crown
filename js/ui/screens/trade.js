@@ -3,6 +3,7 @@ import { pctOfCents } from '../../core/money.js';
 import { CATEGORIES } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel } from '../format.js';
 import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
+import { showNames } from '../../data/shownames.js';
 
 async function save(ctx, tab, row) {
   await ctx.store.put(tab, row);
@@ -13,7 +14,7 @@ const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><pat
 
 export async function render(root, ctx) {
   const stock = (await ctx.store.getAll('items')).filter((i) => i.quantity_on_hand > 0);
-  const events = ctx.settings.events || [];
+  const events = await showNames(ctx.store, ctx.settings);
   // "Edit trade" reverses the old trade and reloads both sides into the builder.
   const pre = ctx.prefill && ctx.prefill.screen === 'trade' ? ctx.prefill : null;
   if (pre) delete ctx.prefill;

@@ -2,6 +2,7 @@ import { bookSale, voidSale, bookCustomSale, bookLotSale } from '../../core/sale
 import { PAYMENT_METHODS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
 import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
+import { showNames } from '../../data/shownames.js';
 
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
@@ -12,7 +13,7 @@ async function save(ctx, tab, row) {
 
 export async function render(root, ctx) {
   const items = (await ctx.store.getAll('items')).filter((i) => i.quantity_on_hand > 0);
-  const events = ctx.settings.events || [];
+  const events = await showNames(ctx.store, ctx.settings);
   const currentShow = ctx.settings.current_show || events[0] || '';
   let selected = null;
   const lot = [];            // [{ item }] — cards in the current bundle

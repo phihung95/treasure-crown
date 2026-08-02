@@ -2,6 +2,7 @@ import { allocatePurchase, marketTotalCents, suggestedOfferCents, reversePurchas
 import { newItem, CATEGORIES, PAYMENT_METHODS, CONDITIONS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
 import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
+import { showNames } from '../../data/shownames.js';
 
 async function save(ctx, tab, row) {
   await ctx.store.put(tab, row);
@@ -12,7 +13,7 @@ function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><path fill="#e6c565" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#e6c565" opacity=".85"/></svg>`;
 
 export async function render(root, ctx) {
-  const events = ctx.settings.events || [];
+  const events = await showNames(ctx.store, ctx.settings);
   // "Edit buy" reverses the old lot and drops its cards back into the builder.
   const pre = ctx.prefill && ctx.prefill.screen === 'buy' ? ctx.prefill : null;
   if (pre) delete ctx.prefill;
