@@ -1,0 +1,9 @@
+# Cloudflare Pages headers. Never let the browser hold a stale copy of the
+# service worker or the app shell, so new deploys always take effect on the
+# next load instead of being served from an old cache.
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+/
+  Cache-Control: no-cache, no-store, must-revalidate
