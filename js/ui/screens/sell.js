@@ -40,6 +40,8 @@ export async function render(root, ctx) {
       <label>Show / event</label>
       <input id="event" list="events" value="${currentShow}" placeholder="Type a show name…" />
       <datalist id="events">${events.map((e) => `<option value="${e}">`).join('')}</datalist>
+      <label>Notes (optional)</label>
+      <input id="note" placeholder="e.g. corner ding · holding for pickup" autocomplete="off" />
       <button class="btn" id="do">Record sale</button>
     </div>
     <div id="recent"></div>
@@ -75,13 +77,13 @@ export async function render(root, ctx) {
   const $ = (s) => root.querySelector(s);
   // Auto-save the in-progress sale so a reload/crash mid-entry doesn't lose it.
   const snapshot = () => {
-    if (selected) saveDraft(ctx.store, 'sell', { item_id: selected.item_id, qty: $('#qty').value, price: $('#price').value, dice: isDice(), pay: $('#pay').value, event: $('#event').value });
+    if (selected) saveDraft(ctx.store, 'sell', { item_id: selected.item_id, qty: $('#qty').value, price: $('#price').value, dice: isDice(), pay: $('#pay').value, event: $('#event').value, note: $('#note').value });
     else clearDraft(ctx.store, 'sell');
   };
 
   root.querySelector('#q').oninput = renderResults;
   root.querySelector('#dice').onchange = () => { setPrice(); snapshot(); };
-  ['#qty', '#price', '#event'].forEach((s) => $(s).addEventListener('input', snapshot));
+  ['#qty', '#price', '#event', '#note'].forEach((s) => $(s).addEventListener('input', snapshot));
   $('#pay').addEventListener('change', snapshot);
 
   // Restore a draft sale if its item is still in stock.
@@ -93,6 +95,7 @@ export async function render(root, ctx) {
     $('#price').value = draft.price ?? $('#price').value;
     if (draft.pay) $('#pay').value = draft.pay;
     if (draft.event != null) $('#event').value = draft.event;
+    if (draft.note != null) $('#note').value = draft.note;
   }
 
   root.querySelector('#do').onclick = async () => {
@@ -106,7 +109,7 @@ export async function render(root, ctx) {
         item: selected, quantity: qty, unit_price_cents: price,
         payment_method: root.querySelector('#pay').value,
         date: new Date().toISOString().slice(0, 10),
-        event: root.querySelector('#event').value.trim(), notes: '',
+        event: root.querySelector('#event').value.trim(), notes: root.querySelector('#note').value.trim(),
         channel: isDice() ? 'dice' : '',
       }, ids.sale());
       await ctx.sync.commitIds();

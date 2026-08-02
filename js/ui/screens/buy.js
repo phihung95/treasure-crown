@@ -26,9 +26,10 @@ export async function render(root, ctx) {
   let overridden = seed ? !!seed.overridden : false;
   let finalCents = seed && seed.finalCents != null ? seed.finalCents : 0;
   const seedPay = seed ? seed.payment : null;
+  const seedNote = seed ? seed.note : null;
 
   const snapshot = () => {
-    if (lines.length) saveDraft(ctx.store, 'buy', { lines, pct, overridden, finalCents, event: root.querySelector('#event') ? root.querySelector('#event').value : currentShow, payment: root.querySelector('#pay') ? root.querySelector('#pay').value : '' });
+    if (lines.length) saveDraft(ctx.store, 'buy', { lines, pct, overridden, finalCents, event: root.querySelector('#event') ? root.querySelector('#event').value : currentShow, payment: root.querySelector('#pay') ? root.querySelector('#pay').value : '', note: root.querySelector('#note') ? root.querySelector('#note').value : '' });
     else clearDraft(ctx.store, 'buy');
   };
 
@@ -77,6 +78,8 @@ export async function render(root, ctx) {
           <input id="event" list="events" value="${esc(currentShow)}" placeholder="Type a show name…" />
           <datalist id="events">${events.map((e) => `<option value="${esc(e)}">`).join('')}</datalist></div>
       </div>
+      <label>Notes (optional)</label>
+      <input id="note" placeholder="e.g. bought from Mike · includes bonus card" autocomplete="off" />
     </div>
 
     <div id="recent-buys"></div>
@@ -90,6 +93,7 @@ export async function render(root, ctx) {
   const $ = (s) => root.querySelector(s);
   if (pre && pre.payment_method) $('#pay').value = pre.payment_method;
   else if (seedPay) $('#pay').value = seedPay;
+  if (seedNote != null) $('#note').value = seedNote;
 
   const renderLines = () => {
     $('#lines').innerHTML = lines.map((l, i) => {
@@ -170,6 +174,7 @@ export async function render(root, ctx) {
   $('#o-reset').onclick = () => { overridden = false; refresh(); };
   $('#event').addEventListener('input', snapshot);
   $('#pay').addEventListener('change', snapshot);
+  $('#note').addEventListener('input', snapshot);
 
   // ---- Customer-facing present mode (transparent: shows everything incl. the %) ----
   $('#present').onclick = () => {
@@ -215,10 +220,11 @@ export async function render(root, ctx) {
       }, ids.item());
       await save(ctx, 'items', item);
     }
+    const userNote = $('#note').value.trim();
     await save(ctx, 'purchases', {
       purchase_id, date: when, event, lot_total_cents: finalCents, market_total_cents: marketTotal(),
       payment_method: $('#pay').value, allocation_method: res.method_used, item_count: res.lines.length,
-      notes: `offer ${pct}% of market ${formatCents(marketTotal())}${res.fallback ? ' (even split — missing values)' : ''}`,
+      notes: [userNote, `offer ${pct}% of market ${formatCents(marketTotal())}${res.fallback ? ' (even split — missing values)' : ''}`].filter(Boolean).join(' · '),
     });
     await ctx.sync.commitIds();
     await clearDraft(ctx.store, 'buy');
@@ -263,6 +269,13 @@ export async function render(root, ctx) {
       }).join('')}</div>`;
 
     box.querySelectorAll('[data-editbuy]').forEach((b) => { b.onclick = async () => {
+      // Guard: editing a past buy replaces the current entry. If one's in
+      // progress, require a confirming second tap so it's never lost by accident.
+      if (lines.length && !b.dataset.armed) {
+        b.dataset.armed = '1'; b.textContent = 'Discard current?'; b.classList.add('danger');
+        setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.textContent = 'Edit'; b.classList.remove('danger'); } }, 3500);
+        return;
+      }
       const p = recentBuys.find((x) => x.purchase_id === b.getAttribute('data-editbuy'));
       const preLines = lotItems(p).map((i) => ({ name: i.name, category: i.category, quantity: i.quantity_on_hand, market_value_cents: i.market_value_cents }));
       await reverseBuy(p);

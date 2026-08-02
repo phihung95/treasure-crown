@@ -32,6 +32,7 @@ export async function render(root, ctx) {
   let cashOverridden = !!seed;
   let cashCents = seed ? seed.cash_cents : 0;
   let cashDir = seed ? seed.cash_direction : 'customer_pays_me';
+  const seedNote = seed ? seed.note : null;
 
   const credited = (l) => pctOfCents(l.market_value_cents || 0, pct); // per unit
   const giveTotal = () => giveLines.reduce((s, l) => s + (l.agreed_value_cents || 0) * (l.quantity || 1), 0);
@@ -89,6 +90,8 @@ export async function render(root, ctx) {
       <label>Show / event</label>
       <input id="event" list="events" value="${esc(currentShow)}" placeholder="Type a show name…" />
       <datalist id="events">${events.map((e) => `<option value="${esc(e)}">`).join('')}</datalist>
+      <label>Notes (optional)</label>
+      <input id="note" placeholder="e.g. even trade · he threw in sleeves" autocomplete="off" />
     </div>
 
     <div id="recent-trades"></div>
@@ -107,7 +110,7 @@ export async function render(root, ctx) {
       saveDraft(ctx.store, 'trade', {
         giveLines: giveLines.map((l) => ({ item_id: l.item.item_id, quantity: l.quantity, agreed_value_cents: l.agreed_value_cents })),
         getLines: getLines.map((l) => ({ fields: l.fields, quantity: l.quantity, market_value_cents: l.market_value_cents })),
-        pct, cash_cents: cashCents, cash_direction: cashDir, event: $('#event') ? $('#event').value : currentShow,
+        pct, cash_cents: cashCents, cash_direction: cashDir, event: $('#event') ? $('#event').value : currentShow, note: $('#note') ? $('#note').value : '',
       });
     } else clearDraft(ctx.store, 'trade');
   };
@@ -224,6 +227,7 @@ export async function render(root, ctx) {
   $('#cash').oninput = () => { cashOverridden = true; cashCents = dollarsToCents($('#cash').value); updateTotals(); };
   $('#dir').onchange = () => { cashOverridden = true; cashDir = $('#dir').value; updateTotals(); };
   $('#event').addEventListener('input', snapshot);
+  $('#note').addEventListener('input', snapshot);
 
   // ---- customer-facing present view ----
   $('#present').onclick = () => {
@@ -267,7 +271,8 @@ export async function render(root, ctx) {
         giveLines,
         getLines: getLines.map((l) => ({ fields: l.fields, quantity: l.quantity, agreed_value_cents: credited(l) })),
         cash_cents: cashCents, cash_direction: cashDir,
-        date: new Date().toISOString().slice(0, 10), event: $('#event').value.trim(), notes: `credit ${pct}% of market`,
+        date: new Date().toISOString().slice(0, 10), event: $('#event').value.trim(),
+        notes: [$('#note').value.trim(), `credit ${pct}% of market`].filter(Boolean).join(' · '),
       }, ids);
       await ctx.sync.commitIds();
     } catch (e) { ctx.toast(e.message); return; }
@@ -320,6 +325,12 @@ export async function render(root, ctx) {
       }).join('')}</div>`;
 
     box.querySelectorAll('[data-edittrade]').forEach((b) => { b.onclick = async () => {
+      // Guard: editing a past trade replaces the current one in progress.
+      if ((giveLines.length || getLines.length) && !b.dataset.armed) {
+        b.dataset.armed = '1'; b.textContent = 'Discard current?'; b.classList.add('danger');
+        setTimeout(() => { if (b.isConnected && b.dataset.armed) { delete b.dataset.armed; b.textContent = 'Edit'; b.classList.remove('danger'); } }, 3500);
+        return;
+      }
       const t = recentTrades.find((x) => x.trade_id === b.getAttribute('data-edittrade'));
       const giveSales = allSales.filter((s) => s.trade_id === t.trade_id && s.type === 'trade_give');
       const m = /credit (\d+)% of market/.exec(t.notes || '');
@@ -345,5 +356,6 @@ export async function render(root, ctx) {
 
   renderGive(); renderGet(); updateTotals();
   if (cashOverridden) { $('#cash').value = (cashCents / 100).toFixed(2); $('#dir').value = cashDir; }
+  if (seedNote != null) $('#note').value = seedNote;
   renderRecentTrades();
 }
