@@ -63,6 +63,14 @@ export async function render(root, ctx) {
         <div class="hero-sub"><span>${formatCents(r.sold.profit_cents)} sold profit · ${formatCents(r.bought.gain_cents)} buy gain${r.traded.count ? ` · ${formatCents(r.traded.profit_cents)} trade` : ''}</span></div>
       </section>
 
+      ${r.days.length > 1 ? `<div class="card">
+        <div class="dl dl-h"><span>By day</span><span class="muted">${r.days.length} days</span></div>
+        ${r.days.map((d, i) => `<div class="dl">
+          <span><b>Day ${i + 1}</b> · ${fmtDate(d.date)}${d.dice.rolls ? ` <span class="chip">🎲 ${d.dice.rolls}</span>` : ''}</span>
+          <span>${d.sold.units} sold · ${formatCents(d.sold.revenue_cents)} · <span class="${d.value_added_cents >= 0 ? 'pos' : 'neg'}"><b>${formatCents(d.value_added_cents)}</b></span></span>
+        </div>`).join('')}
+      </div>` : ''}
+
       <div class="card">
         <div class="dl"><span>Sold</span><span><b>${r.sold.units}</b> cards · ${r.sold.lines} sale${r.sold.lines === 1 ? '' : 's'}</span></div>
         <div class="dl"><span>Revenue</span><span>${formatCents(r.sold.revenue_cents)}</span></div>
