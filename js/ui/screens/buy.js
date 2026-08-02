@@ -243,11 +243,14 @@ export async function render(root, ctx) {
   const lotItems = (p) => allItems.filter((i) => i.source_purchase_id === p.purchase_id);
   const lotSold = (p) => lotItems(p).some((i) => soldItemIds.has(i.item_id));
 
+  // Reverse a lot LOCALLY (fast), then push the deletes in the background. The UI
+  // never waits on the network — so Edit repopulates the builder instantly instead
+  // of appearing to vanish while a slow sync completes.
   const reverseBuy = async (p) => {
     const { itemDeletes } = reversePurchase({ purchase: p, items: allItems });
     for (const id of itemDeletes) { await ctx.store.remove('items', id); await ctx.sync.enqueue({ kind: 'delete', tab: 'items', id }); }
     await ctx.store.remove('purchases', p.purchase_id); await ctx.sync.enqueue({ kind: 'delete', tab: 'purchases', id: p.purchase_id });
-    await ctx.syncNow();
+    ctx.syncNow(); // background — deletes are already saved locally and queued
   };
 
   const renderRecentBuys = () => {
@@ -295,4 +298,7 @@ export async function render(root, ctx) {
   refresh();
   renderRecentBuys();
   if (overridden) $('#final').value = (finalCents / 100).toFixed(2);
+  // After tapping Edit on a recent buy (which lives at the bottom), scroll up so
+  // the reloaded cards are visible — otherwise it looks like the buy vanished.
+  if (pre) setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
 }

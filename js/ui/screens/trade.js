@@ -302,7 +302,7 @@ export async function render(root, ctx) {
     for (const id of itemDeletes) { await ctx.store.remove('items', id); await ctx.sync.enqueue({ kind: 'delete', tab: 'items', id }); }
     for (const id of saleDeletes) { await ctx.store.remove('sales', id); await ctx.sync.enqueue({ kind: 'delete', tab: 'sales', id }); }
     await ctx.store.remove('trades', t.trade_id); await ctx.sync.enqueue({ kind: 'delete', tab: 'trades', id: t.trade_id });
-    await ctx.syncNow();
+    ctx.syncNow(); // background — the reversal is already saved locally and queued
   };
 
   const renderRecentTrades = () => {
@@ -358,4 +358,7 @@ export async function render(root, ctx) {
   if (cashOverridden) { $('#cash').value = (cashCents / 100).toFixed(2); $('#dir').value = cashDir; }
   if (seedNote != null) $('#note').value = seedNote;
   renderRecentTrades();
+  // After tapping Edit on a recent trade (at the bottom), scroll up so the
+  // reloaded sides are visible instead of looking like the trade vanished.
+  if (pre) setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 60);
 }
