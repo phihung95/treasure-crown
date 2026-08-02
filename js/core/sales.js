@@ -30,6 +30,36 @@ export function bookSale({ item, quantity, unit_price_cents, payment_method, dat
   return { saleRow, updatedItem };
 }
 
+// Record a sale for something NOT in inventory (a one-off). No stock changes;
+// item_id is left blank and the cost basis is whatever the user enters (0 by
+// default). Lets the operator ring up a card they never added to inventory.
+export function bookCustomSale({ name, category, quantity, unit_price_cents, unit_cost_cents, payment_method, date, event, notes, channel }, txn_id) {
+  const qty = quantity || 1;
+  const unitCost = unit_cost_cents || 0;
+  const revenue_cents = qty * unit_price_cents;
+  const cost_cents = qty * unitCost;
+  const saleRow = {
+    txn_id,
+    date: date || new Date().toISOString().slice(0, 10),
+    event: event || '',
+    type: 'sale',
+    trade_id: '',
+    item_id: '',
+    item_name: (name && name.trim()) || 'One-off item',
+    category: category || 'other',
+    quantity: qty,
+    unit_price_cents,
+    unit_cost_cents: unitCost,
+    revenue_cents,
+    cost_cents,
+    profit_cents: revenue_cents - cost_cents,
+    payment_method: payment_method || '',
+    notes: notes || '',
+    ...(channel ? { channel } : {}),
+  };
+  return { saleRow };
+}
+
 // Reverse a booked sale: put the sold quantity back on the item's shelf. The
 // cost basis is untouched (a void isn't a repurchase). Returns the item to
 // re-save; if the item no longer exists, updatedItem is null.

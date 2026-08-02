@@ -1,4 +1,4 @@
-import { bookSale, voidSale } from '../../core/sales.js';
+import { bookSale, voidSale, bookCustomSale } from '../../core/sales.js';
 import { PAYMENT_METHODS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
 import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
@@ -28,6 +28,12 @@ export async function render(root, ctx) {
     <div id="results"></div>
     <div id="form" hidden>
       <div class="card" id="sel"></div>
+      <div id="custom-fields" hidden>
+        <label>Item name</label>
+        <input id="c-name" placeholder="What are you selling?" autocomplete="off" />
+        <label>Your cost $ each (optional)</label>
+        <input id="c-cost" inputmode="decimal" value="0.00" />
+      </div>
       <label class="dice-toggle"><input type="checkbox" id="dice" />
         <span>🎲 Dice challenge</span>
         <span class="muted">— $5 a roll, tracked separately</span></label>
@@ -48,25 +54,47 @@ export async function render(root, ctx) {
   `;
 
   const renderResults = () => {
-    const q = root.querySelector('#q').value.toLowerCase();
+    const raw = root.querySelector('#q').value.trim();
+    const q = raw.toLowerCase();
     const shown = q ? items.filter((i) => `${i.name} ${i.set} ${i.cert_number}`.toLowerCase().includes(q)).slice(0, 25) : [];
+    // Always offer a one-off sale for whatever's typed, in case it's not in inventory.
+    const customRow = raw ? `<div class="list-item custom-pick" data-pickcustom="1">
+      <span>＋ Record “<strong>${esc(raw)}</strong>” <span class="chip">not in inventory</span>
+        <div class="muted">a one-off sale — doesn't change stock</div></span></div>` : '';
     root.querySelector('#results').innerHTML = shown.map((i) => `
       <div class="list-item" data-pick="${i.item_id}">
         <span>${i.name} <span class="chip">${catLabel(i.category)}</span>
           <div class="muted">x${i.quantity_on_hand} · cost ${formatCents(i.unit_cost_cents)}</div></span>
         <span class="muted">${formatCents(i.market_value_cents)}</span>
-      </div>`).join('');
+      </div>`).join('') + customRow;
     root.querySelectorAll('[data-pick]').forEach((el) => { el.onclick = () => pick(el.getAttribute('data-pick')); });
+    const cp = root.querySelector('[data-pickcustom]');
+    if (cp) cp.onclick = () => pickCustom(raw);
   };
 
   const isDice = () => root.querySelector('#dice').checked;
   const setPrice = () => {
-    // A dice roll is always $5; otherwise start from the item's market value.
-    root.querySelector('#price').value = isDice() ? '5.00' : (selected ? (selected.market_value_cents / 100).toFixed(2) : '0.00');
+    if (isDice()) { root.querySelector('#price').value = '5.00'; return; }
+    if (selected && selected.custom) return; // one-off: keep whatever price is typed
+    root.querySelector('#price').value = selected ? (selected.market_value_cents / 100).toFixed(2) : '0.00';
+  };
+
+  // Record a sale for something not in inventory: type a name + price (+ optional cost).
+  const pickCustom = (typed) => {
+    const name = (typed ?? root.querySelector('#q').value).trim();
+    selected = { custom: true, name, category: 'single', unit_cost_cents: 0 };
+    root.querySelector('#form').hidden = false;
+    root.querySelector('#custom-fields').hidden = false;
+    root.querySelector('#c-name').value = name;
+    root.querySelector('#sel').innerHTML = `<strong>One-off sale</strong>
+      <div class="muted">not in inventory — won't change stock</div>`;
+    setPrice();
+    snapshot();
   };
 
   const pick = (id) => {
     selected = items.find((i) => i.item_id === id);
+    root.querySelector('#custom-fields').hidden = true;
     root.querySelector('#form').hidden = false;
     root.querySelector('#sel').innerHTML = `<strong>${selected.name}</strong>
       <div class="muted">on hand x${selected.quantity_on_hand} · cost ${formatCents(selected.unit_cost_cents)}</div>`;
@@ -77,44 +105,63 @@ export async function render(root, ctx) {
   const $ = (s) => root.querySelector(s);
   // Auto-save the in-progress sale so a reload/crash mid-entry doesn't lose it.
   const snapshot = () => {
-    if (selected) saveDraft(ctx.store, 'sell', { item_id: selected.item_id, qty: $('#qty').value, price: $('#price').value, dice: isDice(), pay: $('#pay').value, event: $('#event').value, note: $('#note').value });
-    else clearDraft(ctx.store, 'sell');
+    if (!selected) { clearDraft(ctx.store, 'sell'); return; }
+    const common = { qty: $('#qty').value, price: $('#price').value, dice: isDice(), pay: $('#pay').value, event: $('#event').value, note: $('#note').value };
+    if (selected.custom) saveDraft(ctx.store, 'sell', { custom: true, cname: $('#c-name').value, ccost: $('#c-cost').value, ...common });
+    else saveDraft(ctx.store, 'sell', { item_id: selected.item_id, ...common });
   };
 
   root.querySelector('#q').oninput = renderResults;
   root.querySelector('#dice').onchange = () => { setPrice(); snapshot(); };
-  ['#qty', '#price', '#event', '#note'].forEach((s) => $(s).addEventListener('input', snapshot));
+  ['#qty', '#price', '#event', '#note', '#c-name', '#c-cost'].forEach((s) => $(s).addEventListener('input', snapshot));
   $('#pay').addEventListener('change', snapshot);
 
-  // Restore a draft sale if its item is still in stock.
+  // Restore a draft sale: a one-off, or an inventory item still in stock.
   const draft = await loadDraft(ctx.store, 'sell');
-  if (draft && items.some((i) => i.item_id === draft.item_id)) {
-    pick(draft.item_id);
+  const restoreCommon = () => {
     $('#dice').checked = !!draft.dice;
     $('#qty').value = draft.qty ?? '1';
     $('#price').value = draft.price ?? $('#price').value;
     if (draft.pay) $('#pay').value = draft.pay;
     if (draft.event != null) $('#event').value = draft.event;
     if (draft.note != null) $('#note').value = draft.note;
+  };
+  if (draft && draft.custom) {
+    pickCustom(draft.cname || '');
+    $('#c-cost').value = draft.ccost ?? '0.00';
+    restoreCommon();
+  } else if (draft && items.some((i) => i.item_id === draft.item_id)) {
+    pick(draft.item_id);
+    restoreCommon();
   }
 
   root.querySelector('#do').onclick = async () => {
     if (!selected) return;
-    const qty = parseInt(root.querySelector('#qty').value, 10) || 0;
     const price = dollarsToCents(root.querySelector('#price').value);
+    const common = {
+      unit_price_cents: price,
+      payment_method: root.querySelector('#pay').value,
+      date: new Date().toISOString().slice(0, 10),
+      event: root.querySelector('#event').value.trim(),
+      notes: root.querySelector('#note').value.trim(),
+      channel: isDice() ? 'dice' : '',
+    };
     let result;
     try {
       const ids = await ctx.sync.makeIds();
-      result = bookSale({
-        item: selected, quantity: qty, unit_price_cents: price,
-        payment_method: root.querySelector('#pay').value,
-        date: new Date().toISOString().slice(0, 10),
-        event: root.querySelector('#event').value.trim(), notes: root.querySelector('#note').value.trim(),
-        channel: isDice() ? 'dice' : '',
-      }, ids.sale());
+      if (selected.custom) {
+        const qty = Math.max(1, parseInt(root.querySelector('#qty').value, 10) || 1);
+        result = bookCustomSale({
+          name: root.querySelector('#c-name').value.trim(), category: 'single', quantity: qty,
+          unit_cost_cents: dollarsToCents(root.querySelector('#c-cost').value), ...common,
+        }, ids.sale());
+      } else {
+        const qty = parseInt(root.querySelector('#qty').value, 10) || 0;
+        result = bookSale({ item: selected, quantity: qty, ...common }, ids.sale());
+      }
       await ctx.sync.commitIds();
     } catch (e) { ctx.toast(e.message); return; }
-    await save(ctx, 'items', result.updatedItem);
+    if (result.updatedItem) await save(ctx, 'items', result.updatedItem);
     await save(ctx, 'sales', result.saleRow);
     await clearDraft(ctx.store, 'sell');
     await ctx.setCurrentShow(result.saleRow.event);
