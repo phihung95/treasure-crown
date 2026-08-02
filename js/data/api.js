@@ -48,15 +48,16 @@ export function createApi({ url, key, getToken, fetchImpl }) {
 
   return {
     // Pull every data table; returns { items:[...], sales:[...], ... } like the old backend.
+    // Tables are fetched concurrently so boot is one round-trip's latency, not seven.
     async pull() {
       ensure();
-      const out = {};
       const h = await authHeaders();
-      for (const tab of DATA_TABS) {
+      const out = {};
+      await Promise.all(DATA_TABS.map(async (tab) => {
         const res = await doFetch(`${base}/${tab}?select=*`, { headers: h });
         if (!res.ok) throw new Error(`backend error: ${res.status}`);
         out[tab] = await res.json();
-      }
+      }));
       return out;
     },
 

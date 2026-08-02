@@ -221,6 +221,7 @@ export async function render(root, ctx) {
     ov.className = 'present';
     ov.innerHTML = `
       <div class="present-card">
+        <button class="present-x present-close" aria-label="Close">✕</button>
         <div class="present-head">${CROWN}<span>Treasure Crown Collectibles</span></div>
         <div class="present-title">Trade offer</div>
         <div class="present-sub">You receive from us</div>

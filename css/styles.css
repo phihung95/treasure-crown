@@ -291,3 +291,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .present-offer-k { margin-top:14px; font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--gold-soft); font-weight:700; }
 .present-offer { font-size:56px; line-height:1.04; font-weight:800; letter-spacing:-.03em; color:var(--gold-soft); margin:2px 0 18px; font-variant-numeric:tabular-nums; }
 .present-close { background:var(--gold); color:var(--ink); }
+/* Always-reachable close: sticks to the top of the card as its list scrolls */
+.present-x { position:sticky; top:-6px; z-index:3; display:flex; align-items:center; justify-content:center;
+  margin:-8px -8px 4px auto; width:38px; height:38px; border:none; border-radius:50%; cursor:pointer;
+  background:rgba(244,236,221,.14); color:#f4ecdd; font-size:16px; font-weight:800; }
+.present-x:hover { background:rgba(244,236,221,.26); }

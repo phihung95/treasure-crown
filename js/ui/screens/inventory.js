@@ -26,7 +26,8 @@ export async function render(root, ctx) {
   let catFilter = 'all';
 
   root.innerHTML = `
-    <h1>Inventory (${items.length})</h1>
+    <div class="dash-head"><h1>Inventory (${items.length})</h1>
+      <button class="btn" id="jump-add" style="width:auto;margin:0;padding:9px 16px">+ Add item</button></div>
     <div id="inv-summary"></div>
     <input id="q" placeholder="Search name / set / cert / grade…" autocomplete="off" />
     <div class="inv-controls">
@@ -43,7 +44,7 @@ export async function render(root, ctx) {
     </div>
     <div id="list"></div>
 
-    <div class="card">
+    <div class="card" id="add-card">
       <h1 style="font-size:16px">Add item</h1>
       <label>Category</label>
       <select id="cat">${CATEGORIES.map((c) => `<option value="${c}">${catLabel(c)}</option>`).join('')}</select>
@@ -183,6 +184,10 @@ export async function render(root, ctx) {
     root.querySelectorAll('[data-cf]').forEach((x) => x.classList.toggle('on', x === b));
     renderList();
   }; });
+  $('#jump-add').onclick = () => {
+    $('#add-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const nameEl = $('#name'); if (nameEl) setTimeout(() => nameEl.focus(), 300);
+  };
   $('#q').oninput = renderList;
   $('#sort').onchange = renderList;
   $('#cat').onchange = catFields;

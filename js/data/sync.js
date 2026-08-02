@@ -20,6 +20,13 @@ export function createSync({ store, api }) {
   return {
     async makeIds() {
       if (!counters) await loadCounters();
+      // Adopt the freshest shared counter so two devices adding at the same time
+      // don't mint the same id. Keep the higher of local/remote per prefix (local
+      // may be ahead from writes queued offline). Falls back to local when offline.
+      try {
+        const remote = await api.getCounters();
+        if (remote) for (const k of Object.keys(remote)) counters[k] = Math.max(counters[k] || 0, remote[k] || 0);
+      } catch { /* offline — keep local counters */ }
       return {
         item: () => gen('item'),
         sale: () => gen('sale'),
