@@ -278,8 +278,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .side-h .muted { font-weight:600; }
 .side-sum { margin-left:auto; font-weight:800; font-variant-numeric:tabular-nums; color:var(--gold-deep); font-size:16px; }
 .search-res:not(:empty) { margin-top:8px; }
-.trade-row { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+.trade-row { display:grid; grid-template-columns:1fr auto auto auto; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
 .tr-name { font-weight:700; min-width:0; }
+.tr-qty { display:flex; align-items:center; gap:2px; }
+.tr-qty input { width:42px; padding:8px 4px; text-align:center; }
+.tr-qty-max { color:var(--ink-3); font-size:12px; white-space:nowrap; }
 .tr-val { display:inline-flex; align-items:baseline; gap:1px; }
 .cur-sm { color:var(--gold-deep); font-weight:800; }
 .val-in { width:88px; text-align:right; font-size:18px; font-weight:800; border:none; border-bottom:2px solid var(--gold); border-radius:0; padding:2px; background:transparent; color:var(--ink); font-variant-numeric:tabular-nums; }

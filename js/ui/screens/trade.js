@@ -117,14 +117,29 @@ export async function render(root, ctx) {
   };
 
   const renderGive = () => {
-    $('#give').innerHTML = giveLines.map((l, i) => `
-      <div class="trade-row">
-        <span class="tr-name">${esc(l.item.name)}<div class="muted">cost ${formatCents(l.item.unit_cost_cents)}</div></span>
-        <span class="tr-val"><span class="cur-sm">$</span><input class="val-in" data-gv="${i}" inputmode="decimal" value="${(l.agreed_value_cents / 100).toFixed(2)}" aria-label="give value" /></span>
+    $('#give').innerHTML = giveLines.map((l, i) => {
+      const max = l.item.quantity_on_hand || 1;
+      const qty = l.quantity || 1;
+      // Only offer a quantity control when you actually have more than one.
+      const qtyCtl = max > 1
+        ? `<span class="tr-qty"><input data-gq="${i}" inputmode="numeric" value="${qty}" aria-label="quantity" /><span class="tr-qty-max">/${max}</span></span>`
+        : '';
+      const note = `cost ${formatCents(l.item.unit_cost_cents)}${qty > 1 ? ` · ×${qty} = ${formatCents(l.agreed_value_cents * qty)}` : ''}`;
+      return `<div class="trade-row">
+        <span class="tr-name">${esc(l.item.name)}<div class="muted">${note}</div></span>
+        ${qtyCtl}
+        <span class="tr-val"><span class="cur-sm">$</span><input class="val-in" data-gv="${i}" inputmode="decimal" value="${(l.agreed_value_cents / 100).toFixed(2)}" aria-label="give value each" /></span>
         <button class="btn ghost tr-del" data-dg="${i}" aria-label="remove">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     root.querySelectorAll('[data-dg]').forEach((b) => { b.onclick = () => { giveLines.splice(+b.getAttribute('data-dg'), 1); renderGive(); updateTotals(); }; });
     root.querySelectorAll('[data-gv]').forEach((el) => { el.oninput = () => { giveLines[+el.getAttribute('data-gv')].agreed_value_cents = dollarsToCents(el.value); updateTotals(); }; });
+    root.querySelectorAll('[data-gq]').forEach((el) => { el.onchange = () => {
+      const i = +el.getAttribute('data-gq');
+      const max = giveLines[i].item.quantity_on_hand || 1;
+      giveLines[i].quantity = Math.max(1, Math.min(max, parseInt(el.value, 10) || 1));
+      renderGive(); updateTotals();
+    }; });
   };
 
   const renderGet = () => {
