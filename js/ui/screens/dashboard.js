@@ -1,5 +1,5 @@
 import { aggregate } from '../../core/dashboard.js';
-import { transactionCashCents, manualCashCents } from '../../core/cash.js';
+import { transactionCashCents, manualCashCents, moneyHeldCents } from '../../core/cash.js';
 import { formatCents, catLabel } from '../format.js';
 
 const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><path fill="#e6c565" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#e6c565" opacity=".85"/></svg>`;
@@ -28,6 +28,9 @@ export async function render(root, ctx) {
   const cashTx = transactionCashCents({ sales, purchases, trades });
   const cashManual = manualCashCents(cashEvents);
   const cashTotal = cashTx + cashManual;
+  // Money the business holds across ALL payment methods (cash + Zelle + Cash App)
+  // minus buys — so Business Value = inventory + money never drops when you sell.
+  const money = moneyHeldCents({ sales, purchases, trades, cashEvents });
   const settings = await ctx.reloadSettings();
   const currentShow = (settings.current_show || '').trim();
   const today = new Date().toISOString().slice(0, 10);
@@ -40,6 +43,9 @@ export async function render(root, ctx) {
   const invMkt = a.inventory.market_cents;
   const invGain = invMkt - invCost;
   const invPct = invCost > 0 ? Math.round((invGain / invCost) * 100) : 0;
+  // Total business value = what the inventory is worth + the money made from it.
+  // Selling moves value from the left column to the right, so the total holds.
+  const bizValue = invMkt + money;
 
   const saleRows = sales.filter((s) => s.type === 'sale');
   const realizedRevenue = saleRows.reduce((s, r) => s + (r.revenue_cents || 0), 0);
@@ -88,12 +94,15 @@ export async function render(root, ctx) {
     <div class="dash-head"><h1>Home</h1></div>
 
     <section class="hero">
-      <div class="hero-top"><span class="hero-label">Business value · at market</span>${CROWN}</div>
-      <div class="hero-amount">${formatCents(invMkt)}</div>
+      <div class="hero-top"><span class="hero-label">Business value</span>${CROWN}</div>
+      <div class="hero-amount">${formatCents(bizValue)}</div>
+      <div class="hero-breakdown">
+        <span class="hb-part"><span class="hb-k">Inventory</span><span class="hb-v">${formatCents(invMkt)}</span></span>
+        <span class="hb-plus">+</span>
+        <span class="hb-part"><span class="hb-k">Cash &amp; sales</span><span class="hb-v ${money < 0 ? 'neg' : ''}">${signed(money)}</span></span>
+      </div>
       <div class="hero-sub">
-        <span>${itemCount} item${itemCount === 1 ? '' : 's'} · ${unitCount} unit${unitCount === 1 ? '' : 's'}</span>
-        <span class="dot">•</span>
-        <span class="hero-gain ${invGain >= 0 ? 'pos' : 'neg'}">${signed(invGain)} (${invPct}%) over cost</span>
+        <span>${itemCount} item${itemCount === 1 ? '' : 's'} · ${unitCount} unit${unitCount === 1 ? '' : 's'} · inventory at market</span>
       </div>
     </section>
 

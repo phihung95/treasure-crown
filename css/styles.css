@@ -113,6 +113,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .hero-amount { font-size:44px; line-height:1.05; font-weight:800; letter-spacing:-.03em; margin:8px 0 2px; color:var(--gold-soft);
   animation:rise .45s cubic-bezier(.2,.7,.2,1) both; }
 .hero-amount.is-neg { color:var(--neg-dk); }
+/* Inventory + Cash & sales = business value */
+.hero-breakdown { display:flex; align-items:stretch; gap:8px; margin:4px 0 10px; }
+.hb-part { display:flex; flex-direction:column; gap:1px; flex:1; min-width:0; padding:8px 11px;
+  background:rgba(230,197,101,.07); border:1px solid #493a22; border-radius:12px; }
+.hb-k { font-size:11px; font-weight:700; letter-spacing:.2px; color:var(--gold-soft); text-transform:uppercase; opacity:.85; }
+.hb-v { font-size:16px; font-weight:800; letter-spacing:-.01em; color:#f0e6cf; white-space:nowrap; }
+.hb-v.neg { color:var(--neg-dk); }
+.hb-plus { align-self:center; font-size:16px; font-weight:800; color:#8a7c5f; flex:none; }
 .hero-sub { display:flex; align-items:center; gap:8px; font-size:13.5px; color:#cdbfa6; }
 .hero-sub .dot { color:#7d715a; }
 @keyframes rise { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }

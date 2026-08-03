@@ -29,3 +29,19 @@ export function manualCashCents(cashEvents = []) {
 export function cashOnHand({ sales, purchases, trades, cashEvents }) {
   return transactionCashCents({ sales, purchases, trades }) + manualCashCents(cashEvents);
 }
+
+// Money the business holds from trading, across ALL payment methods (cash, Zelle,
+// Cash App, …) plus manual cash adjustments — not just physical cash. Every sale
+// adds its full proceeds, buys and cash paid out on trades subtract, cash taken in
+// on trades adds. Pair with inventory-at-market for a business value that never
+// drops when you sell (the item leaves inventory but its money is added back here).
+export function moneyHeldCents({ sales = [], purchases = [], trades = [], cashEvents = [] }) {
+  let m = 0;
+  for (const s of sales) if (s.type === 'sale') m += s.revenue_cents || 0;
+  for (const p of purchases) m -= p.lot_total_cents || 0;
+  for (const t of trades) {
+    if (t.cash_direction === 'i_pay') m -= t.cash_cents || 0; // I paid cash out
+    else m += t.cash_cents || 0;                              // customer paid me cash
+  }
+  return m + manualCashCents(cashEvents);
+}
