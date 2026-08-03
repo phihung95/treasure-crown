@@ -26,6 +26,7 @@ function itemMeta(it) {
 }
 
 export async function render(root, ctx) {
+  await ctx.reconcile(); // pull the latest from all devices so the numbers are current
   const sales = await ctx.store.getAll('sales');
   const items = await ctx.store.getAll('items');
   let period = 'show';

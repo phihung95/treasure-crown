@@ -125,6 +125,22 @@ async function boot() {
         else setPill('pending', left ? `Saved · ${left} to sync` : 'Offline · saved locally');
       }
     },
+    // Two-way sync: push our changes, THEN pull everyone else's — so two devices
+    // at the same show stay in agreement. Flush-before-pull keeps unsynced local
+    // edits from being clobbered. Screens call this so reports reflect all devices.
+    async reconcile() {
+      if (!supaUrl) return;
+      try {
+        setPill('pending', 'Syncing…');
+        await sync.flush();
+        await sync.pull();
+        setPill('ok', 'Synced');
+      } catch (e) {
+        const left = await pending();
+        if (isServerError(e)) setPill('err', 'Sync error · tap to retry');
+        else setPill('pending', left ? `Saved · ${left} to sync` : 'Offline · saved locally');
+      }
+    },
     refresh() { route(); },
     auth,
     async signOut() { await auth.signOut(); location.reload(); },
@@ -148,7 +164,13 @@ async function boot() {
   }
 
   const pillEl = document.getElementById('sync-pill');
-  if (pillEl) { pillEl.title = 'Tap to sync now'; pillEl.onclick = () => ctx.syncNow(); }
+  if (pillEl) { pillEl.title = 'Tap to sync all devices'; pillEl.onclick = async () => { await ctx.reconcile(); route(); }; }
+
+  // When the app comes back to the foreground (reopened / tab refocused), pull
+  // the latest so a device that sat idle doesn't show stale numbers.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') { await ctx.reconcile(); route(); }
+  });
 
   async function route() {
     const name = (location.hash.replace('#/', '') || 'dashboard');

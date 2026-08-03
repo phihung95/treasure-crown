@@ -16,6 +16,7 @@ function dateRange(a, b) {
 }
 
 export async function render(root, ctx) {
+  await ctx.reconcile(); // pull the latest from all devices so the report is current
   const [sales, purchases, trades] = await Promise.all([
     ctx.store.getAll('sales'), ctx.store.getAll('purchases'), ctx.store.getAll('trades'),
   ]);
