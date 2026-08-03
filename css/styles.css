@@ -85,7 +85,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .btn:focus-visible, .seg-btn:focus-visible, .tabbar a:focus-visible { outline:2px solid var(--gold-deep); outline-offset:2px; }
 
 .row { display:flex; gap:10px; } .row > * { flex:1; }
-.card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px; margin:10px 0; box-shadow:var(--shadow); }
+.card { background:var(--surface); border:1px solid var(--line); border-radius:15px; padding:15px; margin:11px 0; box-shadow:var(--shadow); }
 .muted { color:var(--ink-3); font-size:13px; }
 .right { text-align:right; } .big { font-size:26px; font-weight:800; letter-spacing:-.02em; }
 .pos { color:var(--pos); } .neg { color:var(--neg); }
@@ -103,9 +103,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .seg-btn { border:none; background:transparent; color:var(--ink-3); font-weight:700; font-size:13px; padding:7px 14px; border-radius:8px; cursor:pointer; text-transform:capitalize; }
 .seg-btn.on { background:var(--gold); color:var(--ink); box-shadow:0 1px 2px rgba(23,19,11,.15); }
 
-/* Hero: gold money on dark — the "treasure" */
-.hero { position:relative; overflow:hidden; background:linear-gradient(160deg,var(--hero-2),var(--hero)); color:#f4ecdd;
-  border-radius:16px; padding:18px 18px 16px; box-shadow:var(--shadow-hero); border:1px solid #2b2214; }
+/* Hero: gold money on a warm, soft dark — the "treasure" */
+.hero { position:relative; overflow:hidden; color:#f6efe0;
+  background:radial-gradient(120% 120% at 85% -10%, rgba(230,197,101,.16), transparent 55%), linear-gradient(150deg,#3a2f18,#1d1610);
+  border-radius:20px; padding:20px 20px 18px; box-shadow:var(--shadow-hero); border:1px solid #493a22; }
 .hero-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
 .hero-label { font-size:12.5px; font-weight:700; letter-spacing:.3px; color:var(--gold-soft); text-transform:uppercase; }
 .hero .crown-wm { width:34px; height:34px; opacity:.9; flex:none; margin:-2px -2px 0 0; }
@@ -128,16 +129,37 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 
 /* Small secondary inventory stats */
 .stat-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:12px 0; }
-.stat { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:11px 13px; box-shadow:var(--shadow);
+.stat { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px 14px; box-shadow:var(--shadow);
   display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
 .stat-k { font-size:12.5px; color:var(--ink-3); font-weight:600; }
 .stat-v { font-size:17px; font-weight:800; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
 .stat-v.pos { color:var(--pos); } .stat-v.neg { color:var(--neg); }
-@media (min-width:560px) { .stat-row { grid-template-columns:repeat(4,1fr); } }
+@media (min-width:720px) { .stat-row { grid-template-columns:repeat(4,1fr); } }
 
 /* Business-value gain on the dark hero */
 .hero-gain.pos { color:var(--pos-dk); font-weight:700; }
 .hero-gain.neg { color:var(--neg-dk); font-weight:700; }
+
+/* ===== Home hub: quick actions + active show ===== */
+.hub-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0; }
+.hub-btn { display:flex; flex-direction:column; align-items:center; gap:6px; padding:15px 8px; background:var(--surface);
+  border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); color:var(--ink); text-decoration:none;
+  font-weight:800; font-size:14px; transition:transform .08s ease, border-color .12s ease, box-shadow .12s ease; }
+.hub-btn:hover { border-color:var(--gold); transform:translateY(-2px); box-shadow:0 6px 18px rgba(23,19,11,.10); }
+.hub-btn:active { transform:translateY(0); }
+.hub-ic { display:flex; align-items:center; justify-content:center; width:38px; height:38px; border-radius:50%;
+  background:#faf3e0; color:var(--gold-deep); font-size:19px; font-weight:800; }
+
+.show-hub { display:block; margin:14px 0; padding:16px 18px; border-radius:18px; text-decoration:none; color:#f6efe0;
+  background:radial-gradient(120% 120% at 90% -20%, rgba(230,197,101,.14), transparent 55%), linear-gradient(140deg,#3f331a,#241c0f);
+  border:1px solid #4a3c22; box-shadow:var(--shadow); }
+.show-hub-top { display:flex; justify-content:space-between; align-items:center; }
+.show-hub-k { font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color:var(--gold-soft); }
+.show-hub-go { font-size:13px; font-weight:800; color:var(--gold-soft); }
+.show-hub-name { font-size:19px; font-weight:800; margin:7px 0 5px; letter-spacing:-.01em; line-height:1.15; }
+.show-hub-stats { font-size:14px; color:#d9ccb1; font-variant-numeric:tabular-nums; }
+.show-hub-stats b { color:#fff; }
+.show-hub .pos { color:var(--pos-dk); font-weight:800; } .show-hub .neg { color:var(--neg-dk); font-weight:800; }
 
 /* Nudge card shown before the first sale */
 .hint-card { display:flex; flex-direction:column; gap:2px; text-decoration:none; margin:12px 0;
@@ -180,8 +202,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .list-item.lot-in .muted:last-child { color:var(--gold-deep); font-weight:800; }
 
 /* Data panels + aligned money tables */
-.panel { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:6px 14px 12px; margin:12px 0; box-shadow:var(--shadow); }
-.panel-h { font-size:12.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--ink-3); padding:12px 0 8px; border-bottom:1px solid var(--line); }
+.panel { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:6px 15px 13px; margin:12px 0; box-shadow:var(--shadow); }
+.panel-h { font-size:13px; font-weight:800; letter-spacing:.3px; text-transform:uppercase; color:var(--ink-2); padding:13px 0 9px; border-bottom:1px solid var(--line); }
 .tbl { display:block; overflow-x:auto; }
 .thd, .trow { display:grid; align-items:center; gap:18px; padding:11px 0; }
 .thd { font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--ink-3); border-bottom:1px solid var(--line); }
