@@ -231,6 +231,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 /* ===================== Shows ===================== */
 .show-card { cursor:pointer; }
 .show-card:hover { border-color:var(--gold); }
+/* Grand-total summary at the top of the shows list */
+.show-total { border:1px solid var(--gold); background:linear-gradient(180deg,#fdfaf1,#fffdf8); }
+.show-total .show-name { color:var(--gold-deep); }
 .show-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
 .show-name { font-weight:800; font-size:16px; }
 .show-date { color:var(--ink-3); font-size:13px; font-weight:600; white-space:nowrap; }

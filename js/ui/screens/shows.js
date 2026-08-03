@@ -30,7 +30,30 @@ export async function render(root, ctx) {
         <p>Tag your buys, sales, and trades with a show and each one gets summarized here.</p></div>`;
       return;
     }
-    root.innerHTML = `<h1>Shows</h1>` + rows.map((r) => `
+    // Grand total across every show.
+    const t = rows.reduce((acc, r) => {
+      acc.value_added += r.value_added_cents;
+      acc.sale_profit += r.sold.profit_cents;
+      acc.units += r.sold.units;
+      acc.revenue += r.sold.revenue_cents;
+      acc.bought += r.bought.items;
+      acc.spent += r.bought.spent_cents;
+      acc.net_cash += r.net_cash_cents;
+      return acc;
+    }, { value_added: 0, sale_profit: 0, units: 0, revenue: 0, bought: 0, spent: 0, net_cash: 0 });
+    const totalCard = `<div class="card show-total">
+      <div class="show-head"><span class="show-name">All shows</span><span class="show-date">${rows.length} show${rows.length === 1 ? '' : 's'}</span></div>
+      <div class="show-metrics">
+        <div class="show-metric ${t.value_added >= 0 ? 'pos' : 'neg'}"><span class="show-metric-v">${formatCents(t.value_added)}</span><span class="show-metric-k">value added</span></div>
+        <div class="show-metric ${t.sale_profit >= 0 ? 'pos' : 'neg'}"><span class="show-metric-v">${formatCents(t.sale_profit)}</span><span class="show-metric-k">sale profit</span></div>
+      </div>
+      <div class="show-stats">
+        <span class="ss">Sold <b>${t.units}</b> · ${formatCents(t.revenue)}</span>
+        <span class="ss">Bought <b>${t.bought}</b> · ${formatCents(t.spent)}</span>
+        <span class="ss net-ss">Net cash ${formatCents(t.net_cash)}</span>
+      </div>
+    </div>`;
+    root.innerHTML = `<h1>Shows</h1>` + totalCard + rows.map((r) => `
       <div class="card show-card" data-show="${esc(r.event)}" role="button" tabindex="0">
         <div class="show-head"><span class="show-name">${esc(r.event)}</span><span class="show-date">${dateRange(r.first_date, r.last_date)}</span></div>
         <div class="show-metrics">
