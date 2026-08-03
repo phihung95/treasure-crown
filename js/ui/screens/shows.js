@@ -33,7 +33,12 @@ export async function render(root, ctx) {
     root.innerHTML = `<h1>Shows</h1>` + rows.map((r) => `
       <div class="card show-card" data-show="${esc(r.event)}" role="button" tabindex="0">
         <div class="show-head"><span class="show-name">${esc(r.event)}</span><span class="show-date">${dateRange(r.first_date, r.last_date)}</span></div>
-        <div class="show-value ${r.value_added_cents >= 0 ? 'pos' : 'neg'}">${formatCents(r.value_added_cents)} <span class="show-value-k">value added</span></div>
+        <div class="show-metrics">
+          <div class="show-metric ${r.value_added_cents >= 0 ? 'pos' : 'neg'}">
+            <span class="show-metric-v">${formatCents(r.value_added_cents)}</span><span class="show-metric-k">value added</span></div>
+          <div class="show-metric ${r.sold.profit_cents >= 0 ? 'pos' : 'neg'}">
+            <span class="show-metric-v">${formatCents(r.sold.profit_cents)}</span><span class="show-metric-k">sale profit</span></div>
+        </div>
         <div class="show-stats">
           <span class="ss">Sold <b>${r.sold.units}</b> · ${formatCents(r.sold.revenue_cents)}</span>
           <span class="ss">Bought <b>${r.bought.items}</b> · ${formatCents(r.bought.spent_cents)}</span>

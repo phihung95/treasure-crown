@@ -234,9 +234,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .show-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
 .show-name { font-weight:800; font-size:16px; }
 .show-date { color:var(--ink-3); font-size:13px; font-weight:600; white-space:nowrap; }
-.show-value { margin-top:6px; font-size:22px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
-.show-value.pos { color:var(--pos); } .show-value.neg { color:var(--neg); }
-.show-value-k { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-3); margin-left:4px; }
+/* Two headline metrics per show card: value added + actual sale profit */
+.show-metrics { display:flex; gap:22px; margin-top:8px; }
+.show-metric { display:flex; flex-direction:column; }
+.show-metric-v { font-size:21px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.show-metric-k { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-3); }
+.show-metric.pos .show-metric-v { color:var(--pos); } .show-metric.neg .show-metric-v { color:var(--neg); }
 .show-stats { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:8px; color:var(--ink-2); font-size:13.5px; }
 .show-stats .ss b { color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums; }
 .show-stats .net-ss { margin-left:auto; color:var(--ink-3); }
