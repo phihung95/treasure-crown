@@ -162,6 +162,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .sale-row.editing { display:block; padding:12px 0; }
 .sale-del { width:100%; margin-top:8px; color:var(--neg); border-color:#f2ccc5; }
 .sale-del.danger { background:var(--neg); color:#fff; border-color:var(--neg); font-weight:800; }
+/* Prominent "selected to sell" card that pops to the top on pick */
+.sel-card { display:flex; align-items:center; gap:12px; padding:14px; margin:10px 0 4px; border:2px solid var(--gold); border-radius:12px; background:#fbf6ea; box-shadow:var(--shadow); }
+.sel-check { flex:none; width:30px; height:30px; border-radius:50%; background:var(--gold); color:var(--ink); display:flex; align-items:center; justify-content:center; font-weight:800; }
+.sel-info { min-width:0; }
+.sel-name { font-weight:800; font-size:17px; letter-spacing:-.01em; }
+
 /* One-off "not in inventory" sell option */
 .custom-pick { border:1px dashed var(--gold); background:#fbf6ea; cursor:pointer; }
 .custom-pick:hover { background:#f7efdb; }

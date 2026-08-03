@@ -47,7 +47,7 @@ export async function render(root, ctx) {
       <button class="btn" id="lot-do" disabled>Record lot sale</button>
     </section>
     <div id="form" hidden>
-      <div class="card" id="sel"></div>
+      <div id="sel"></div>
       <div id="custom-fields" hidden>
         <label>Item name</label>
         <input id="c-name" placeholder="What are you selling?" autocomplete="off" />
@@ -140,6 +140,15 @@ export async function render(root, ctx) {
     root.querySelector('#price').value = selected ? (selected.market_value_cents / 100).toFixed(2) : '0.00';
   };
 
+  // A prominent "selected" card so it's obvious which item was tapped.
+  const selCard = (title, sub) => `<div class="sel-card"><span class="sel-check">✓</span>
+    <div class="sel-info"><div class="sel-name">${esc(title)}</div><div class="muted">${sub}</div></div></div>`;
+  // After picking, collapse the search results and bring the selection to the top.
+  const focusSelection = () => {
+    root.querySelector('#results').innerHTML = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Record a sale for something not in inventory: type a name + price (+ optional cost).
   const pickCustom = (typed) => {
     const name = (typed ?? root.querySelector('#q').value).trim();
@@ -147,9 +156,9 @@ export async function render(root, ctx) {
     root.querySelector('#form').hidden = false;
     root.querySelector('#custom-fields').hidden = false;
     root.querySelector('#c-name').value = name;
-    root.querySelector('#sel').innerHTML = `<strong>One-off sale</strong>
-      <div class="muted">not in inventory — won't change stock</div>`;
+    root.querySelector('#sel').innerHTML = selCard(name || 'One-off sale', "not in inventory — won't change stock");
     setPrice();
+    focusSelection();
     snapshot();
   };
 
@@ -157,9 +166,10 @@ export async function render(root, ctx) {
     selected = items.find((i) => i.item_id === id);
     root.querySelector('#custom-fields').hidden = true;
     root.querySelector('#form').hidden = false;
-    root.querySelector('#sel').innerHTML = `<strong>${selected.name}</strong>
-      <div class="muted">on hand x${selected.quantity_on_hand} · cost ${formatCents(selected.unit_cost_cents)}</div>`;
+    const meta = [selected.set, selected.card_number ? `#${selected.card_number}` : '', selected.condition].filter(Boolean).join(' · ');
+    root.querySelector('#sel').innerHTML = selCard(selected.name, `${meta ? `${esc(meta)} · ` : ''}on hand ×${selected.quantity_on_hand} · cost ${formatCents(selected.unit_cost_cents)}`);
     setPrice();
+    focusSelection();
     snapshot();
   };
 
