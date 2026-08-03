@@ -280,6 +280,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .dl:last-child { border-bottom:none; }
 .dl span:last-child { font-variant-numeric:tabular-nums; color:var(--ink); }
 .dl.dl-h { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-3); }
+.dl.dl-total { font-weight:800; color:var(--ink); border-top:1.5px solid var(--line); border-bottom:none; margin-top:2px; }
+.dl.dl-total span:last-child { font-size:15px; }
 .dl b { font-weight:800; }
 
 /* ===================== Inventory ===================== */

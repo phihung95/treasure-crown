@@ -45,3 +45,15 @@ export function moneyHeldCents({ sales = [], purchases = [], trades = [], cashEv
   }
   return m + manualCashCents(cashEvents);
 }
+
+// Net money taken in per payment method: sale proceeds minus buys paid that way,
+// keyed by method (cash/zelle/venmo/cashapp/…). Trades and manual cash adjustments
+// aren't tied to a digital wallet, so they're left out. Use it to show how much
+// has flowed through Zelle, Cash App, Venmo, etc.
+export function moneyByMethodCents({ sales = [], purchases = [] }) {
+  const by = {};
+  const add = (method, cents) => { const k = method || 'other'; by[k] = (by[k] || 0) + cents; };
+  for (const s of sales) if (s.type === 'sale') add(s.payment_method, s.revenue_cents || 0);
+  for (const p of purchases) add(p.payment_method, -(p.lot_total_cents || 0));
+  return by;
+}

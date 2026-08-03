@@ -1,5 +1,9 @@
-import { transactionCashCents, manualCashCents } from '../../core/cash.js';
-import { dollarsToCents, formatCents } from '../format.js';
+import { transactionCashCents, manualCashCents, moneyByMethodCents } from '../../core/cash.js';
+import { dollarsToCents, formatCents, payLabel } from '../format.js';
+
+// Digital wallets shown separately from cash (cash lives in the hero above).
+// Stable order; any other non-cash method with activity is appended.
+const METHOD_ORDER = ['zelle', 'cashapp', 'venmo'];
 
 const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><path fill="#e6c565" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#e6c565" opacity=".85"/></svg>`;
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -20,6 +24,12 @@ export async function render(root, ctx) {
   const total = txCash + manual;
   const today = new Date().toISOString().slice(0, 10);
 
+  // Net money taken in through each digital wallet (sales minus buys paid that way).
+  const byMethod = moneyByMethodCents({ sales, purchases });
+  const methods = [...METHOD_ORDER, ...Object.keys(byMethod).filter((m) => !METHOD_ORDER.includes(m) && m !== 'cash')]
+    .filter((m) => byMethod[m]); // only wallets with activity
+  const methodTotal = methods.reduce((s, m) => s + byMethod[m], 0);
+
   root.innerHTML = `
     <div class="dash-head"><h1>Cash</h1></div>
 
@@ -28,6 +38,15 @@ export async function render(root, ctx) {
       <div class="hero-amount ${total < 0 ? 'is-neg' : ''}">${formatCents(total)}</div>
       <div class="hero-sub"><span>${formatCents(txCash)} tracked from cash sales/buys</span><span class="dot">•</span><span>${formatCents(manual)} your adjustments</span></div>
     </section>
+
+    ${methods.length ? `<section class="panel">
+      <div class="panel-h">Digital payments</div>
+      <p class="muted" style="margin:9px 0 2px;font-size:12.5px">Money taken in through each wallet (cash is above).</p>
+      <div class="tbl">
+        ${methods.map((m) => `<div class="dl"><span>${payLabel(m)}</span><span class="${byMethod[m] < 0 ? 'neg' : ''}">${formatCents(byMethod[m])}</span></div>`).join('')}
+        <div class="dl dl-total"><span>Total digital</span><span>${formatCents(methodTotal)}</span></div>
+      </div>
+    </section>` : ''}
 
     <div class="card">
       <h1 style="font-size:16px">Adjust cash</h1>
