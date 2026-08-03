@@ -1,4 +1,4 @@
-import { bookSale, voidSale, bookCustomSale, bookLotSale } from '../../core/sales.js';
+import { bookSale, voidSale, bookCustomSale, bookLotSale, editSale } from '../../core/sales.js';
 import { PAYMENT_METHODS } from '../../core/schema.js';
 import { dollarsToCents, formatCents, catLabel, payLabel } from '../format.js';
 import { loadDraft, saveDraft, clearDraft } from '../../data/drafts.js';
@@ -69,6 +69,7 @@ export async function render(root, ctx) {
       <label>Notes (optional)</label>
       <input id="note" placeholder="e.g. corner ding · holding for pickup" autocomplete="off" />
       <button class="btn" id="do">Record sale</button>
+      <button class="btn ghost" id="clear-sel">Clear</button>
     </div>
     <div id="recent"></div>
   `;
@@ -171,10 +172,26 @@ export async function render(root, ctx) {
     else saveDraft(ctx.store, 'sell', { item_id: selected.item_id, ...common });
   };
 
+  // Drop the current selection and wipe the saved draft, so returning to Sell
+  // later starts fresh instead of reopening the last item.
+  const clearSelection = () => {
+    selected = null;
+    $('#form').hidden = true;
+    $('#custom-fields').hidden = true;
+    $('#dice').checked = false;
+    $('#note').value = '';
+    $('#c-name').value = ''; $('#c-cost').value = '0.00';
+    $('#q').value = '';
+    clearDraft(ctx.store, 'sell');
+    renderResults();
+    $('#q').focus();
+  };
+
   root.querySelector('#q').oninput = renderResults;
   root.querySelector('#dice').onchange = () => { setPrice(); snapshot(); };
   ['#qty', '#price', '#event', '#note', '#c-name', '#c-cost'].forEach((s) => $(s).addEventListener('input', snapshot));
   $('#pay').addEventListener('change', snapshot);
+  $('#clear-sel').onclick = clearSelection;
 
   // Lot mode: toggle switches the search into "add to bundle" behavior.
   $('#lot-mode').onchange = () => {
@@ -285,6 +302,8 @@ export async function render(root, ctx) {
       <select data-epay>${PAYMENT_METHODS.map((p) => `<option value="${p}" ${p === s.payment_method ? 'selected' : ''}>${payLabel(p)}</option>`).join('')}</select>
       <label>Show / event</label>
       <input data-eev list="events" value="${esc(s.event || '')}" />
+      <label>Notes</label>
+      <input data-enote value="${esc(s.notes || '')}" placeholder="optional" />
       <label class="dice-toggle"><input type="checkbox" data-edice ${s.channel === 'dice' ? 'checked' : ''} />
         <span>🎲 Dice challenge</span></label>
       <div class="row">
@@ -316,6 +335,7 @@ export async function render(root, ctx) {
           unit_price_cents: dollarsToCents(box.querySelector('[data-ep]').value),
           payment_method: box.querySelector('[data-epay]').value,
           event: box.querySelector('[data-eev]').value.trim(),
+          notes: box.querySelector('[data-enote]').value.trim(),
           channel: box.querySelector('[data-edice]').checked ? 'dice' : '',
         }));
       } catch (e) { ctx.toast(e.message); return; }

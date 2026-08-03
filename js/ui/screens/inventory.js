@@ -125,9 +125,9 @@ export async function render(root, ctx) {
     const a = attr(i);
     const flags = `${!hasMv ? '<span class="flag warn">needs price</span>' : ''}${underwater ? '<span class="flag neg">underwater</span>' : ''}`;
     return `<div class="inv-row">
-      <div class="inv-main">
+      <div class="inv-main tap" data-editrow="${i.item_id}" role="button" tabindex="0">
         <div class="inv-name">${esc(i.name)} <span class="chip">${catLabel(i.category)}</span>${a ? `<span class="inv-attr">${esc(a)}</span>` : ''}</div>
-        <div class="muted">×${i.quantity_on_hand} · cost ${formatCents(i.unit_cost_cents)} · mkt ${hasMv ? formatCents(i.market_value_cents) : '—'}${flags}</div>
+        <div class="muted">×${i.quantity_on_hand} · cost ${formatCents(i.unit_cost_cents)} · mkt ${hasMv ? formatCents(i.market_value_cents) : '—'}${flags} <span class="tap-hint">· tap to edit</span></div>
       </div>
       <div class="inv-money">
         ${profit != null
@@ -144,7 +144,12 @@ export async function render(root, ctx) {
       && (!q || `${i.name} ${i.set} ${i.cert_number} ${i.grader} ${i.grade}`.toLowerCase().includes(q)));
     shown = sortItems(shown, $('#sort').value);
     $('#list').innerHTML = shown.map(row).join('') || '<p class="muted">No items match.</p>';
-    root.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => { editing = b.getAttribute('data-edit'); renderList(); const n = root.querySelector('[data-en]'); if (n) { n.focus(); n.select(); } }; });
+    const openEdit = (id) => { editing = id; renderList(); const n = root.querySelector('[data-en]'); if (n) { n.focus(); n.select(); } };
+    root.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => openEdit(b.getAttribute('data-edit')); });
+    root.querySelectorAll('[data-editrow]').forEach((el) => {
+      el.onclick = () => openEdit(el.getAttribute('data-editrow'));
+      el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(el.getAttribute('data-editrow')); } };
+    });
     root.querySelectorAll('[data-cancel]').forEach((b) => { b.onclick = () => { editing = null; renderList(); }; });
     root.querySelectorAll('[data-done]').forEach((b) => { b.onclick = async () => {
       const id = b.getAttribute('data-done');

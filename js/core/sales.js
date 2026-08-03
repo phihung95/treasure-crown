@@ -121,6 +121,7 @@ export function editSale(sale, item, changes = {}) {
     profit_cents: revenue_cents - cost_cents,
     payment_method: changes.payment_method ?? sale.payment_method,
     event: changes.event ?? sale.event,
+    notes: changes.notes ?? sale.notes,
     channel: changes.channel ? 'dice' : '',
   };
   const updatedItem = item ? { ...item, quantity_on_hand: newOnHand, status: deriveStatus(newOnHand) } : null;

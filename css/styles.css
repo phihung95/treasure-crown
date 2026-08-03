@@ -230,6 +230,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .inv-row { display:flex; align-items:center; gap:10px; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--surface); margin:8px 0; box-shadow:var(--shadow); }
 .inv-row.editing { display:block; }
 .inv-main { flex:1; min-width:0; }
+.inv-main.tap { cursor:pointer; }
+.inv-main.tap:hover .inv-name { color:var(--gold-deep); }
+.tap-hint { color:var(--gold-deep); font-weight:600; white-space:nowrap; }
 .inv-name { font-weight:700; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .inv-attr { color:var(--ink-3); font-weight:600; font-size:13px; }
 .inv-money { text-align:right; flex:none; }
