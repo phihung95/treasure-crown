@@ -47,10 +47,10 @@ export async function render(root, ctx) {
         <div class="show-metric ${t.value_added >= 0 ? 'pos' : 'neg'}"><span class="show-metric-v">${formatCents(t.value_added)}</span><span class="show-metric-k">value added</span></div>
         <div class="show-metric ${t.sale_profit >= 0 ? 'pos' : 'neg'}"><span class="show-metric-v">${formatCents(t.sale_profit)}</span><span class="show-metric-k">sale profit</span></div>
       </div>
+      <div class="show-total-made"><span class="stm-k">Total made · net cash</span><span class="stm-v ${t.net_cash >= 0 ? 'pos' : 'neg'}">${formatCents(t.net_cash)}</span></div>
       <div class="show-stats">
         <span class="ss">Sold <b>${t.units}</b> · ${formatCents(t.revenue)}</span>
         <span class="ss">Bought <b>${t.bought}</b> · ${formatCents(t.spent)}</span>
-        <span class="ss net-ss">Net cash ${formatCents(t.net_cash)}</span>
       </div>
     </div>`;
     root.innerHTML = `<h1>Shows</h1>` + totalCard + rows.map((r) => `
@@ -62,12 +62,12 @@ export async function render(root, ctx) {
           <div class="show-metric ${r.sold.profit_cents >= 0 ? 'pos' : 'neg'}">
             <span class="show-metric-v">${formatCents(r.sold.profit_cents)}</span><span class="show-metric-k">sale profit</span></div>
         </div>
+        <div class="show-total-made"><span class="stm-k">Total made · net cash</span><span class="stm-v ${r.net_cash_cents >= 0 ? 'pos' : 'neg'}">${formatCents(r.net_cash_cents)}</span></div>
         <div class="show-stats">
           <span class="ss">Sold <b>${r.sold.units}</b> · ${formatCents(r.sold.revenue_cents)}</span>
           <span class="ss">Bought <b>${r.bought.items}</b> · ${formatCents(r.bought.spent_cents)}</span>
           ${r.traded.count ? `<span class="ss">Trades <b>${r.traded.count}</b></span>` : ''}
           ${r.dice.rolls ? `<span class="ss">🎲 <b>${r.dice.rolls}</b> · ${formatCents(r.dice.revenue_cents)}</span>` : ''}
-          <span class="ss net-ss">Net cash ${formatCents(r.net_cash_cents)}</span>
         </div>
       </div>`).join('');
     root.querySelectorAll('[data-show]').forEach((el) => {
