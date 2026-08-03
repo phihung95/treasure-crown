@@ -1,5 +1,6 @@
 import { reportByShow } from '../../core/shows.js';
-import { formatCents, payLabel } from '../format.js';
+import { transactionCashCents } from '../../core/cash.js';
+import { dollarsToCents, formatCents, payLabel } from '../format.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><path fill="#e6c565" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#e6c565" opacity=".85"/></svg>`;
@@ -82,6 +83,7 @@ export async function render(root, ctx) {
     if (!r) { selected = null; drawList(); return; }
     const tradeCashNet = r.traded.cash_in_cents - r.traded.cash_out_cents;
     const pays = Object.keys(r.by_payment);
+    const showCashNet = transactionCashCents({ sales, purchases, trades }, r.event); // physical cash movement this show
     root.innerHTML = `
       <button class="btn ghost back-btn" id="back">← All shows</button>
       <div class="show-detail-h"><h1>${esc(r.event)}</h1><div class="muted">${dateRange(r.first_date, r.last_date)}</div></div>
@@ -135,7 +137,32 @@ export async function render(root, ctx) {
         <div class="dl dl-h"><span>Payments taken</span><span></span></div>
         ${pays.map((p) => `<div class="dl"><span>${payLabel(p)}</span><span>${formatCents(r.by_payment[p])}</span></div>`).join('')}
       </div>` : ''}
+
+      <div class="card">
+        <div class="dl dl-h"><span>💵 Cash drawer</span><span class="muted">count &amp; reconcile</span></div>
+        <div class="dl"><span>Started with</span><span class="cur-in">$ <input id="cd-start" inputmode="decimal" value="0.00" aria-label="started with" /></span></div>
+        <div class="dl"><span>Cash in/out this show</span><span class="${showCashNet >= 0 ? 'pos' : 'neg'}">${showCashNet >= 0 ? '+' : ''}${formatCents(showCashNet)}</span></div>
+        <div class="dl"><span>Should be in the box</span><span id="cd-expected"><b>${formatCents(showCashNet)}</b></span></div>
+        <div class="dl"><span>Counted</span><span class="cur-in">$ <input id="cd-count" inputmode="decimal" placeholder="0.00" aria-label="counted" /></span></div>
+        <div class="dl"><span>Difference</span><span id="cd-diff" class="muted">—</span></div>
+      </div>
     `;
+    // Live cash-drawer reconcile: expected = started + net cash movement; diff = counted − expected.
+    const cdStart = root.querySelector('#cd-start');
+    const cdCount = root.querySelector('#cd-count');
+    const cdRecalc = () => {
+      const start = dollarsToCents(cdStart.value);
+      const expected = start + showCashNet;
+      root.querySelector('#cd-expected').innerHTML = `<b>${formatCents(expected)}</b>`;
+      const diffEl = root.querySelector('#cd-diff');
+      if (cdCount.value.trim() === '') { diffEl.textContent = '—'; diffEl.className = 'muted'; return; }
+      const diff = dollarsToCents(cdCount.value) - expected;
+      diffEl.innerHTML = `<b>${diff >= 0 ? '+' : ''}${formatCents(diff)}</b>${diff === 0 ? ' ✓' : ' ⚠'}`;
+      diffEl.className = diff === 0 ? 'pos' : 'neg';
+    };
+    cdStart.addEventListener('input', cdRecalc);
+    cdCount.addEventListener('input', cdRecalc);
+
     root.querySelector('#back').onclick = () => { selected = null; drawList(); };
   };
 

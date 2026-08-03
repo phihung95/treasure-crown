@@ -1,4 +1,5 @@
 import { aggregate } from '../../core/dashboard.js';
+import { transactionCashCents, manualCashCents } from '../../core/cash.js';
 import { formatCents, catLabel } from '../format.js';
 
 const CROWN = `<svg class="crown-wm" viewBox="0 0 24 24" aria-hidden="true"><path fill="#e6c565" d="M2.4 8 6 11l6-6.6L18 11l3.6-3-1.7 9.4H4.1L2.4 8Z"/><rect x="4" y="19.2" width="16" height="2.4" rx="1.2" fill="#e6c565" opacity=".85"/></svg>`;
@@ -21,6 +22,12 @@ export async function render(root, ctx) {
   await ctx.reconcile(); // pull the latest from all devices so the numbers are current
   const sales = await ctx.store.getAll('sales');
   const items = await ctx.store.getAll('items');
+  const [purchases, trades, cashEvents] = await Promise.all([
+    ctx.store.getAll('purchases'), ctx.store.getAll('trades'), ctx.store.getAll('cash_events'),
+  ]);
+  const cashTx = transactionCashCents({ sales, purchases, trades });
+  const cashManual = manualCashCents(cashEvents);
+  const cashTotal = cashTx + cashManual;
   const settings = await ctx.reloadSettings();
   const currentShow = (settings.current_show || '').trim();
   const today = new Date().toISOString().slice(0, 10);
@@ -97,6 +104,11 @@ export async function render(root, ctx) {
     </nav>
 
     ${showCard}
+
+    <a class="cash-card" href="#/cash">
+      <span class="cash-card-k">💵 Cash on hand</span>
+      <span class="cash-card-r"><span class="cash-card-v ${cashTotal < 0 ? 'neg' : ''}">${formatCents(cashTotal)}</span><span class="cash-card-go">Manage →</span></span>
+    </a>
 
     <div class="stat-row">
       <div class="stat"><span class="stat-k">Cost basis</span><span class="stat-v">${formatCents(invCost)}</span></div>

@@ -1,7 +1,7 @@
 import { TABS, ID_FIELD, createMemStore } from './memstore.js';
 
 const DB_NAME = 'tcc';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // v2: adds the cash_events object store
 const DEFAULT_SETTINGS = { machine_hourly_rate_cents: 0, events: [], current_show: '', supabase_url: '', supabase_key: '', session: null, buy_percent: 80, counters: {} };
 
 function openDb() {

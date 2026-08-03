@@ -4,7 +4,7 @@ import { createSync } from '../data/sync.js';
 import { createAuth } from '../data/auth.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 
-const ROUTES = ['dashboard', 'shows', 'inventory', 'buy', 'sell', 'trade', 'prints', 'settings'];
+const ROUTES = ['dashboard', 'shows', 'inventory', 'buy', 'sell', 'trade', 'prints', 'cash', 'settings'];
 
 // On the hosted site, talk to Supabase through our OWN domain (/api proxy)
 // instead of supabase.co directly — some managed networks/MDM block the
@@ -179,7 +179,7 @@ async function boot() {
       a.classList.toggle('active', a.getAttribute('href') === `#/${screen}`);
     });
     const moreBtn = document.getElementById('tab-more');
-    if (moreBtn) moreBtn.classList.toggle('active', ['shows', 'prints', 'settings'].includes(screen));
+    if (moreBtn) moreBtn.classList.toggle('active', ['shows', 'cash', 'prints', 'settings'].includes(screen));
     const sheet = document.getElementById('more-sheet');
     if (sheet) sheet.hidden = true;
     const root = document.getElementById('screen');

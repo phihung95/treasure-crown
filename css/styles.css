@@ -161,6 +161,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .show-hub-stats b { color:#fff; }
 .show-hub .pos { color:var(--pos-dk); font-weight:800; } .show-hub .neg { color:var(--neg-dk); font-weight:800; }
 
+/* Cash-on-hand card (links to the Cash screen) */
+.cash-card { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; padding:14px 16px;
+  background:var(--surface); border:1px solid var(--gold); border-radius:15px; box-shadow:var(--shadow); text-decoration:none; color:var(--ink); }
+.cash-card:hover { background:#fdfaf1; }
+.cash-card-k { font-weight:800; font-size:15px; }
+.cash-card-r { display:flex; align-items:baseline; gap:12px; }
+.cash-card-v { font-size:20px; font-weight:800; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.cash-card-v.neg { color:var(--neg); }
+.cash-card-go { font-size:13px; font-weight:700; color:var(--gold-deep); white-space:nowrap; }
+
 /* Nudge card shown before the first sale */
 .hint-card { display:flex; flex-direction:column; gap:2px; text-decoration:none; margin:12px 0;
   background:var(--surface); border:1px dashed var(--gold); border-radius:14px; padding:14px; box-shadow:var(--shadow); }
@@ -250,6 +260,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .stm-k { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-2); }
 .stm-v { font-size:19px; font-weight:800; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
 .stm-v.pos { color:var(--pos); } .stm-v.neg { color:var(--neg); }
+/* Inline "$ [input]" used in the cash drawer reconcile */
+.cur-in { display:inline-flex; align-items:baseline; gap:3px; font-weight:800; }
+.cur-in input { width:84px; text-align:right; padding:7px 8px; font-weight:800; }
 .show-stats { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:8px; color:var(--ink-2); font-size:13.5px; }
 .show-stats .ss b { color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums; }
 .show-stats .net-ss { margin-left:auto; color:var(--ink-3); }

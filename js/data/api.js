@@ -1,8 +1,8 @@
 // Talks to a Supabase project's auto-generated REST API (PostgREST) with plain
 // fetch — no SDK, keeping the app dependency-free. `url` is the project URL
 // (https://<ref>.supabase.co) and `key` is the anon/publishable API key.
-const DATA_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments'];
-const ID_FIELD = { items: 'item_id', sales: 'txn_id', trades: 'trade_id', purchases: 'purchase_id', print_products: 'print_product_id', print_parts: 'part_id', filaments: 'filament_id' };
+const DATA_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events'];
+const ID_FIELD = { items: 'item_id', sales: 'txn_id', trades: 'trade_id', purchases: 'purchase_id', print_products: 'print_product_id', print_parts: 'part_id', filaments: 'filament_id', cash_events: 'cash_id' };
 
 export function createApi({ url, key, getToken, fetchImpl }) {
   const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
