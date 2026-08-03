@@ -20,11 +20,14 @@ export async function render(root, ctx) {
   let lotMode = false;
   let lotPriceEdited = false;
 
-  // Most recent sales first (txn ids are monotonic), for quick undo.
-  const recent = (await ctx.store.getAll('sales'))
+  // Most recent sales first (txn ids are monotonic), for quick fix/undo.
+  const allSales = (await ctx.store.getAll('sales'))
     .filter((s) => s.type === 'sale')
-    .sort((a, b) => String(b.txn_id).localeCompare(String(a.txn_id)))
-    .slice(0, 12);
+    .sort((a, b) => String(b.txn_id).localeCompare(String(a.txn_id)));
+  const recent = allSales.slice(0, 5);
+  const today = new Date().toISOString().slice(0, 10);
+  const todays = allSales.filter((s) => s.date === today);
+  const todayRevenue = todays.reduce((sum, r) => sum + (r.revenue_cents || 0), 0);
 
   root.innerHTML = `
     <h1>Sell</h1>
@@ -327,8 +330,10 @@ export async function render(root, ctx) {
   const renderRecent = () => {
     const box = root.querySelector('#recent');
     if (!recent.length) { box.innerHTML = ''; return; }
-    box.innerHTML = `<div class="panel"><div class="panel-h">Recent sales</div>
-      ${recent.map((s) => (s.txn_id === editingSale ? editRow(s) : displayRow(s))).join('')}</div>`;
+    box.innerHTML = `<div class="panel">
+      <div class="panel-h recent-h">Recent sales${todays.length ? `<span class="recent-today">Today: ${todays.length} · ${formatCents(todayRevenue)}</span>` : ''}</div>
+      ${recent.map((s) => (s.txn_id === editingSale ? editRow(s) : displayRow(s))).join('')}
+      ${allSales.length > recent.length ? '<a class="recent-all" href="#/shows">See all in Shows →</a>' : ''}</div>`;
 
     box.querySelectorAll('[data-editsale]').forEach((b) => { b.onclick = () => { editingSale = b.getAttribute('data-editsale'); renderRecent(); }; });
     const cancel = box.querySelector('[data-canceledit]');
