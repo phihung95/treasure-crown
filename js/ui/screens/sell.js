@@ -143,9 +143,11 @@ export async function render(root, ctx) {
     root.querySelector('#price').value = selected ? (selected.market_value_cents / 100).toFixed(2) : '0.00';
   };
 
-  // A prominent "selected" card so it's obvious which item was tapped.
+  // A prominent "selected" card so it's obvious which item was tapped. The ✕
+  // dismisses the selection (same as Clear).
   const selCard = (title, sub) => `<div class="sel-card"><span class="sel-check">✓</span>
-    <div class="sel-info"><div class="sel-name">${esc(title)}</div><div class="muted">${sub}</div></div></div>`;
+    <div class="sel-info"><div class="sel-name">${esc(title)}</div><div class="muted">${sub}</div></div>
+    <button class="sel-x" data-clearsel aria-label="Unselect">✕</button></div>`;
   // After picking, collapse the search results and bring the selection to the top.
   const focusSelection = () => {
     root.querySelector('#results').innerHTML = '';
@@ -205,6 +207,8 @@ export async function render(root, ctx) {
   ['#qty', '#price', '#event', '#note', '#c-name', '#c-cost'].forEach((s) => $(s).addEventListener('input', snapshot));
   $('#pay').addEventListener('change', snapshot);
   $('#clear-sel').onclick = clearSelection;
+  // The ✕ on the selected card (its content changes, so delegate on the container).
+  $('#sel').addEventListener('click', (e) => { if (e.target.closest('[data-clearsel]')) clearSelection(); });
 
   // Lot mode: toggle switches the search into "add to bundle" behavior.
   $('#lot-mode').onchange = () => {
