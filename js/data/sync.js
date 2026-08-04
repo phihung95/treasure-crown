@@ -1,7 +1,7 @@
 import { ID_FIELD } from './memstore.js';
 
-const PREFIX = { item: 'ITM', sale: 'TXN', trade: 'TRD', purchase: 'PUR', printProduct: 'PP', part: 'PART', filament: 'FIL', cash: 'CASH' };
-const DATA_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events'];
+const PREFIX = { item: 'ITM', sale: 'TXN', trade: 'TRD', purchase: 'PUR', printProduct: 'PP', part: 'PART', filament: 'FIL', cash: 'CASH', expense: 'EXP' };
+const DATA_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses'];
 
 export function createSync({ store, api }) {
   let counters = null;
@@ -36,6 +36,7 @@ export function createSync({ store, api }) {
         part: () => gen('part'),
         filament: () => gen('filament'),
         cash: () => gen('cash'),
+        expense: () => gen('expense'),
       };
     },
     async commitIds() {

@@ -1,4 +1,4 @@
-const CACHE = 'tcc-v43';
+const CACHE = 'tcc-v44';
 const SHELL = [
   './', './index.html', './css/styles.css', './manifest.webmanifest',
   './js/ui/app.js', './js/ui/format.js', './js/config.js',
@@ -6,7 +6,7 @@ const SHELL = [
   './js/core/allocation.js', './js/core/inventory.js', './js/core/sales.js', './js/core/trades.js', './js/core/dashboard.js', './js/core/shows.js', './js/core/csv.js', './js/core/cash.js',
   './js/data/store.js', './js/data/memstore.js', './js/data/api.js', './js/data/sync.js', './js/data/auth.js', './js/data/drafts.js', './js/data/shownames.js',
   './js/ui/screens/dashboard.js', './js/ui/screens/shows.js', './js/ui/screens/inventory.js', './js/ui/screens/buy.js',
-  './js/ui/screens/sell.js', './js/ui/screens/trade.js', './js/ui/screens/prints.js', './js/ui/screens/cash.js', './js/ui/screens/settings.js'
+  './js/ui/screens/sell.js', './js/ui/screens/trade.js', './js/ui/screens/prints.js', './js/ui/screens/cash.js', './js/ui/screens/expenses.js', './js/ui/screens/settings.js'
 ];
 
 self.addEventListener('install', (e) => {

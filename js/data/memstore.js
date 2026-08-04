@@ -1,4 +1,4 @@
-export const TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'queue'];
+export const TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses', 'queue'];
 export const ID_FIELD = {
   items: 'item_id',
   sales: 'txn_id',
@@ -8,6 +8,7 @@ export const ID_FIELD = {
   print_parts: 'part_id',
   filaments: 'filament_id',
   cash_events: 'cash_id',
+  expenses: 'expense_id',
   queue: 'op_id',
 };
 

@@ -22,15 +22,16 @@ export async function render(root, ctx) {
   await ctx.reconcile(); // pull the latest from all devices so the numbers are current
   const sales = await ctx.store.getAll('sales');
   const items = await ctx.store.getAll('items');
-  const [purchases, trades, cashEvents] = await Promise.all([
-    ctx.store.getAll('purchases'), ctx.store.getAll('trades'), ctx.store.getAll('cash_events'),
+  const [purchases, trades, cashEvents, expenses] = await Promise.all([
+    ctx.store.getAll('purchases'), ctx.store.getAll('trades'), ctx.store.getAll('cash_events'), ctx.store.getAll('expenses'),
   ]);
   const cashTx = transactionCashCents({ sales, purchases, trades });
   const cashManual = manualCashCents(cashEvents);
   const cashTotal = cashTx + cashManual;
   // Money the business holds across ALL payment methods (cash + Zelle + Cash App)
-  // minus buys — so Business Value = inventory + money never drops when you sell.
-  const money = moneyHeldCents({ sales, purchases, trades, cashEvents });
+  // minus buys and expenses — so Business Value = inventory + money never drops
+  // when you sell, but does drop when you spend on the business.
+  const money = moneyHeldCents({ sales, purchases, trades, cashEvents, expenses });
   const settings = await ctx.reloadSettings();
   const currentShow = (settings.current_show || '').trim();
   const today = new Date().toISOString().slice(0, 10);

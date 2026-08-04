@@ -30,12 +30,25 @@ export function cashOnHand({ sales, purchases, trades, cashEvents }) {
   return transactionCashCents({ sales, purchases, trades }) + manualCashCents(cashEvents);
 }
 
+// Business expenses: booth fees, supplies, filament, shipping, etc. Total money out.
+export function expensesTotalCents(expenses = []) {
+  return expenses.reduce((s, e) => s + (e.amount_cents || 0), 0);
+}
+
+// Expense total broken out by category, for a quick "where the money went" view.
+export function expensesByCategoryCents(expenses = []) {
+  const by = {};
+  for (const e of expenses) { const k = e.category || 'other'; by[k] = (by[k] || 0) + (e.amount_cents || 0); }
+  return by;
+}
+
 // Money the business holds from trading, across ALL payment methods (cash, Zelle,
-// Cash App, …) plus manual cash adjustments — not just physical cash. Every sale
-// adds its full proceeds, buys and cash paid out on trades subtract, cash taken in
-// on trades adds. Pair with inventory-at-market for a business value that never
-// drops when you sell (the item leaves inventory but its money is added back here).
-export function moneyHeldCents({ sales = [], purchases = [], trades = [], cashEvents = [] }) {
+// Cash App, …) plus manual cash adjustments and minus business expenses — not just
+// physical cash. Every sale adds its full proceeds; buys, cash paid out on trades,
+// and expenses subtract; cash taken in on trades adds. Pair with inventory-at-market
+// for a business value that never drops when you sell (the item leaves inventory but
+// its money is added back here).
+export function moneyHeldCents({ sales = [], purchases = [], trades = [], cashEvents = [], expenses = [] }) {
   let m = 0;
   for (const s of sales) if (s.type === 'sale') m += s.revenue_cents || 0;
   for (const p of purchases) m -= p.lot_total_cents || 0;
@@ -43,7 +56,7 @@ export function moneyHeldCents({ sales = [], purchases = [], trades = [], cashEv
     if (t.cash_direction === 'i_pay') m -= t.cash_cents || 0; // I paid cash out
     else m += t.cash_cents || 0;                              // customer paid me cash
   }
-  return m + manualCashCents(cashEvents);
+  return m + manualCashCents(cashEvents) - expensesTotalCents(expenses);
 }
 
 // Net money taken in per payment method: sale proceeds minus buys paid that way,
