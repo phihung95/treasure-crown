@@ -48,6 +48,7 @@ body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-ser
 .login-sub { color:var(--ink-3); font-size:14px; margin:5px 0 12px; }
 .login-card label { margin-top:12px; }
 .login-err { margin-top:12px; padding:9px 11px; background:#fbe9e6; border:1px solid #f2ccc5; color:var(--neg); border-radius:9px; font-size:13px; font-weight:600; }
+.login-note { margin-top:12px; padding:9px 11px; background:#eef7ee; border:1px solid #cfe6cf; color:#2f6b34; border-radius:9px; font-size:13px; font-weight:600; }
 .login-link { display:block; width:100%; background:none; border:none; color:var(--gold-deep); font-weight:700; font-size:13px; margin-top:12px; cursor:pointer; text-decoration:underline; }
 .acct-card { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 

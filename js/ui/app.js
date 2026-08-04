@@ -26,29 +26,50 @@ function renderLogin(store, settings) {
   ov.innerHTML = `
     <form class="login-card" id="lg-form" autocomplete="on">
       <div class="login-brand">${LOGIN_CROWN}<span>Treasure Crown</span></div>
-      <div class="login-sub">Sign in to your account</div>
+      <div class="login-sub" id="lg-sub">Sign in to your account</div>
       <div id="lg-conn" ${needsConfig ? '' : 'hidden'}>
         <label>Supabase project URL</label>
         <input id="lg-url" value="${lgEsc(settings.supabase_url || '')}" placeholder="https://xxxx.supabase.co" autocomplete="off" />
         <label>Supabase anon key</label>
         <input id="lg-key" value="${lgEsc(settings.supabase_key || '')}" placeholder="eyJhbGciOi…" autocomplete="off" />
       </div>
+      <div id="lg-shop-wrap" hidden>
+        <label>Shop name</label>
+        <input id="lg-shop" placeholder="My Card Shop" autocomplete="organization" />
+      </div>
       <label>Email</label>
       <input id="lg-email" type="email" autocomplete="username" placeholder="you@example.com" />
       <label>Password</label>
       <input id="lg-pass" type="password" autocomplete="current-password" placeholder="••••••••" />
       <div class="login-err" id="lg-err" hidden></div>
+      <div class="login-note" id="lg-note" hidden></div>
       <button class="btn" type="submit" id="lg-btn">Sign in</button>
+      <button type="button" class="login-link" id="lg-switch">New here? Create an account</button>
       ${needsConfig ? '' : '<button type="button" class="login-link" id="lg-toggle">Change connection</button>'}
     </form>`;
   document.body.appendChild(ov);
   const $ = (s) => ov.querySelector(s);
+  let mode = 'signin';
   const toggle = $('#lg-toggle');
   if (toggle) toggle.onclick = () => { $('#lg-conn').hidden = !$('#lg-conn').hidden; };
+
+  const setMode = (m) => {
+    mode = m;
+    const up = m === 'signup';
+    $('#lg-sub').textContent = up ? 'Create your account' : 'Sign in to your account';
+    $('#lg-btn').textContent = up ? 'Create account' : 'Sign in';
+    $('#lg-switch').textContent = up ? 'Have an account? Sign in' : 'New here? Create an account';
+    $('#lg-shop-wrap').hidden = !up;
+    $('#lg-pass').setAttribute('autocomplete', up ? 'new-password' : 'current-password');
+    $('#lg-err').hidden = true;
+  };
+  $('#lg-switch').onclick = () => setMode(mode === 'signin' ? 'signup' : 'signin');
+
   $('#lg-form').onsubmit = async (e) => {
     e.preventDefault();
-    const btn = $('#lg-btn'); const err = $('#lg-err');
-    err.hidden = true; btn.disabled = true; btn.textContent = 'Signing in…';
+    const btn = $('#lg-btn'); const err = $('#lg-err'); const note = $('#lg-note');
+    err.hidden = true; note.hidden = true; btn.disabled = true;
+    btn.textContent = mode === 'signup' ? 'Creating…' : 'Signing in…';
     try {
       let url = settings.supabase_url; let key = settings.supabase_key;
       if ($('#lg-url')) {
@@ -56,11 +77,22 @@ function renderLogin(store, settings) {
         await store.setSettings({ supabase_url: url, supabase_key: key });
       }
       const auth = createAuth({ url: apiBaseFor(url), key, store });
-      await auth.signIn($('#lg-email').value.trim(), $('#lg-pass').value);
+      const email = $('#lg-email').value.trim();
+      const pass = $('#lg-pass').value;
+      if (mode === 'signup') {
+        const shop = $('#lg-shop').value.trim();
+        await store.setSettings({ pending_shop_name: shop || 'My Shop' });
+        const { confirmed } = await auth.signUp(email, pass);
+        if (confirmed) { location.reload(); return; }
+        note.textContent = 'Account created — check your email to confirm, then sign in.';
+        note.hidden = false; setMode('signin'); btn.disabled = false; btn.textContent = 'Sign in';
+        return;
+      }
+      await auth.signIn(email, pass);
       location.reload();
     } catch (ex) {
-      err.textContent = ex.message || 'Sign in failed'; err.hidden = false;
-      btn.disabled = false; btn.textContent = 'Sign in';
+      err.textContent = ex.message || (mode === 'signup' ? 'Could not create account' : 'Sign in failed'); err.hidden = false;
+      btn.disabled = false; btn.textContent = mode === 'signup' ? 'Create account' : 'Sign in';
     }
   };
 }
@@ -84,13 +116,29 @@ async function boot() {
   const supaKey = settings.supabase_key || SUPABASE_ANON_KEY;
   const base = apiBaseFor(supaUrl);
   const auth = createAuth({ url: base, key: supaKey, store });
-  const api = createApi({ url: base, key: supaKey, getToken: () => auth.token() });
+  // The account this user belongs to; stamped onto every write so data lands in
+  // (and is readable only within) their tenant. Cached in settings for offline boots.
+  let currentAccountId = settings.account_id || null;
+  const api = createApi({ url: base, key: supaKey, getToken: () => auth.token(), getAccountId: () => currentAccountId });
   const sync = createSync({ store, api });
 
   // The backend is always configured (built-in), so sign-in just needs the
   // operator's email + password; a fresh device goes straight to that.
   const session = await auth.restore();
   if (!supaUrl || !session) { renderLogin(store, { ...settings, supabase_url: supaUrl, supabase_key: supaKey }); return; }
+
+  // Resolve the signed-in user's account. A brand-new user has none yet, so
+  // provision one (their first sign-in creates their workspace). Do this BEFORE
+  // any sync so reads/writes are correctly scoped. Offline: keep the cached id.
+  try {
+    const remote = await api.getMyAccount();
+    if (remote) currentAccountId = remote;
+    else if (!currentAccountId) currentAccountId = await api.provisionAccount(settings.pending_shop_name || 'My Shop');
+  } catch { /* offline or transient — fall back to the cached account_id */ }
+  if (currentAccountId && (currentAccountId !== settings.account_id || settings.pending_shop_name)) {
+    await store.setSettings({ account_id: currentAccountId, pending_shop_name: '' });
+    settings = await store.getSettings();
+  }
 
   const pending = async () => { try { return (await store.getAll('queue')).length; } catch { return 0; } };
 

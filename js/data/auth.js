@@ -44,6 +44,21 @@ export function createAuth({ url, key, store }) {
       await save(toSession(data));
       return session;
     },
+    // Create a new account. If the project has email confirmation off, GoTrue
+    // returns a session immediately (confirmed:true); otherwise the user must
+    // confirm via email before signing in (confirmed:false).
+    async signUp(email, password) {
+      if (!url) throw new Error('Not connected — enter your Supabase URL and key first.');
+      const res = await fetch(`${authBase}/signup`, {
+        method: 'POST',
+        headers: { apikey: key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error_description || data.msg || data.error || 'Could not create account');
+      if (data.access_token) { await save(toSession(data)); return { confirmed: true }; }
+      return { confirmed: false };
+    },
     async restore() { return load(); },          // signed in on this device if a session exists
     async signOut() { await save(null); },
     async token() {
