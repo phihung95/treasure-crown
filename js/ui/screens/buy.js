@@ -92,6 +92,7 @@ export async function render(root, ctx) {
     <div id="recent-buys"></div>
 
     <div class="total-bar">
+      <button class="btn ghost" style="width:auto;margin:0" id="cancel" hidden>Cancel</button>
       <button class="btn secondary" style="width:auto;margin:0" id="present" disabled>Show customer</button>
       <button class="btn" style="width:auto;margin:0" id="save" disabled>${pre ? 'Save changes' : 'Record buy'}</button>
     </div>
@@ -158,6 +159,7 @@ export async function render(root, ctx) {
     $('#terms').hidden = !has;
     $('#present').disabled = !has;
     $('#save').disabled = !has;
+    $('#cancel').hidden = !has;
     $('#o-mkt').textContent = formatCents(marketTotal());
     $('#o-sug').textContent = formatCents(suggested());
     $('#o-sug-k').textContent = `At ${pct}% of market`;
@@ -194,6 +196,24 @@ export async function render(root, ctx) {
   $('#event').addEventListener('input', snapshot);
   $('#pay').addEventListener('change', snapshot);
   $('#note').addEventListener('input', snapshot);
+
+  // Cancel: discard the whole in-progress buy (and its auto-saved draft). Two-tap
+  // so a stray press never wipes cards you've entered.
+  const cancelBtn = $('#cancel');
+  cancelBtn.onclick = async () => {
+    if (!cancelBtn.dataset.armed) {
+      cancelBtn.dataset.armed = '1'; cancelBtn.textContent = 'Discard?'; cancelBtn.classList.add('danger');
+      setTimeout(() => { if (cancelBtn.isConnected && cancelBtn.dataset.armed) { delete cancelBtn.dataset.armed; cancelBtn.textContent = 'Cancel'; cancelBtn.classList.remove('danger'); } }, 3000);
+      return;
+    }
+    lines.length = 0; editing = -1; overridden = false; finalCents = 0;
+    await clearDraft(ctx.store, 'buy');
+    $('#l-name').value = ''; $('#l-set').value = ''; $('#l-num').value = ''; $('#l-cond').value = ''; $('#l-qty').value = '1'; $('#l-mv').value = '';
+    $('#note').value = '';
+    refresh();
+    ctx.toast('Buy cleared');
+    $('#l-name').focus();
+  };
 
   // ---- Customer-facing present mode (transparent: shows everything incl. the %) ----
   $('#present').onclick = () => {
