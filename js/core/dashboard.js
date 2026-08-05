@@ -1,3 +1,34 @@
+import { reportByShow } from './shows.js';
+
+// Roll up all business activity whose date falls in [start, end] (inclusive,
+// 'YYYY-MM-DD' strings), across every show, into one set of totals — the flows
+// behind the dashboard's period view (sold / bought / traded / value added /
+// net cash / expenses). Snapshot figures (inventory value) are handled elsewhere
+// since they describe "now", not a window. Pure: the caller computes the range.
+export function aggregatePeriod({ sales = [], purchases = [], trades = [], expenses = [], start, end }) {
+  const inRange = (d) => !!d && (!start || d >= start) && (!end || d <= end);
+  const rows = reportByShow({
+    sales: sales.filter((s) => inRange(s.date)),
+    purchases: purchases.filter((p) => inRange(p.date)),
+    trades: trades.filter((t) => inRange(t.date)),
+  });
+  const acc = {
+    sold: { lines: 0, units: 0, revenue_cents: 0, cost_cents: 0, profit_cents: 0 },
+    dice: { rolls: 0, revenue_cents: 0, cost_cents: 0, profit_cents: 0 },
+    bought: { items: 0, spent_cents: 0, market_cents: 0, gain_cents: 0 },
+    traded: { count: 0, profit_cents: 0, cash_in_cents: 0, cash_out_cents: 0 },
+    net_cash_cents: 0, value_added_cents: 0,
+  };
+  for (const r of rows) {
+    for (const k of ['sold', 'dice', 'bought', 'traded']) for (const f of Object.keys(acc[k])) acc[k][f] += r[k][f];
+    acc.net_cash_cents += r.net_cash_cents;
+    acc.value_added_cents += r.value_added_cents;
+  }
+  acc.expenses_cents = expenses.filter((e) => inRange(e.date)).reduce((s, e) => s + (e.amount_cents || 0), 0);
+  acc.shows = rows.length;
+  return acc;
+}
+
 export function periodKey(dateISO, period) {
   if (period === 'month') return dateISO.slice(0, 7);
   return dateISO;

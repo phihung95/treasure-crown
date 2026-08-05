@@ -42,13 +42,13 @@ export async function render(root, ctx) {
     ${acct ? `<div class="card acct-card"><span class="muted">Signed in as <strong style="color:var(--ink)">${esc(acct)}</strong></span>
       <button class="btn ghost" id="signout" style="width:auto;margin:0">Sign out</button></div>` : ''}
     <div class="card">
-      <h1 style="font-size:16px">Shows</h1>
+      <h1 style="font-size:16px">Sources</h1>
       ${s.current_show
-        ? `<p class="muted">Active show: <strong style="color:var(--gold-deep)">${esc(s.current_show)}</strong> — auto-fills Buy / Sell / Trade.</p>`
-        : '<p class="muted">No active show yet. Set one on Buy, Sell, or Trade, or add it below.</p>'}
-      <label>Your shows (comma-separated)</label>
-      <input id="events" value="${esc((s.events || []).join(', '))}" placeholder="Bergen Show, Oslo Con" />
-      <p class="muted" style="margin-top:6px">New shows you type on Buy / Sell / Trade are saved here automatically.</p>
+        ? `<p class="muted">Active source: <strong style="color:var(--gold-deep)">${esc(s.current_show)}</strong> — auto-fills Buy / Sell / Trade.</p>`
+        : '<p class="muted">No active source yet. Set one on Buy, Sell, or Trade, or add it below.</p>'}
+      <label>Your sources (comma-separated)</label>
+      <input id="events" value="${esc((s.events || []).join(', '))}" placeholder="Card show, Facebook Marketplace, eBay" />
+      <p class="muted" style="margin-top:6px">Sources you type on Buy / Sell / Trade are saved here. Set each one's type (show, online…) in the Sources tab.</p>
     </div>
 
     <div class="card">
@@ -72,6 +72,12 @@ export async function render(root, ctx) {
       <button class="btn secondary" id="exp-inv">⤓ Inventory (CSV)</button>
       <button class="btn secondary" id="exp-sales">⤓ Sales &amp; trades (CSV)</button>
       <button class="btn ghost" id="exp-all">⤓ Full backup (everything, JSON)</button>
+    </div>
+
+    <div class="card">
+      <h1 style="font-size:16px">Import</h1>
+      <p class="muted" style="margin-bottom:8px">Refresh market values from a Collectr export. Previews every change before anything is saved.</p>
+      <a class="btn secondary" href="#/import" style="text-decoration:none">⤒ Import from Collectr</a>
     </div>
 
     <div class="card">

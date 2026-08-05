@@ -30,7 +30,11 @@ export async function render(root, ctx) {
   const getLines = seed ? seed.getLines.map((g) => ({ fields: { ...g.fields }, quantity: g.quantity, market_value_cents: g.market_value_cents })) : [];
   let editingGet = -1;
   let pct = seed ? seed.pct : (Number(ctx.settings.buy_percent) || 80);
-  let cashOverridden = !!seed;
+  // Auto-calculate the cash-on-top by default. Only lock it when editing a past
+  // trade (its recorded cash is authoritative) or when a restored draft shows the
+  // user had explicitly typed a cash amount — NOT just because a draft exists, or
+  // the constant auto-save would freeze the calculation after any re-render.
+  let cashOverridden = pre ? true : !!(draft && draft.cash_overridden);
   let cashCents = seed ? seed.cash_cents : 0;
   let cashDir = seed ? seed.cash_direction : 'customer_pays_me';
   const seedNote = seed ? seed.note : null;
@@ -38,10 +42,15 @@ export async function render(root, ctx) {
   const credited = (l) => pctOfCents(l.market_value_cents || 0, pct); // per unit
   const giveTotal = () => giveLines.reduce((s, l) => s + (l.agreed_value_cents || 0) * (l.quantity || 1), 0);
   const getTotal = () => getLines.reduce((s, l) => s + credited(l) * (l.quantity || 1), 0);
+  // Full market value of the cards you're taking in (before the credit %).
+  const getMarketTotal = () => getLines.reduce((s, l) => s + (l.market_value_cents || 0) * (l.quantity || 1), 0);
   const diff = () => giveTotal() - getTotal(); // + => customer receives more => customer pays me
 
   root.innerHTML = `
-    <h1>Trade</h1>
+    <div class="seg seg-wide" role="tablist" aria-label="Buy or trade">
+      <a class="seg-btn" href="#/buy" role="tab" aria-selected="false">Buy</a>
+      <a class="seg-btn on" href="#/trade" role="tab" aria-selected="true">Trade</a>
+    </div>
 
     <div class="card">
       <div class="side-h">You give <span class="muted">— your cards</span><span class="side-sum" id="give-sum">$0.00</span></div>
@@ -54,6 +63,7 @@ export async function render(root, ctx) {
     <div class="card">
       <div class="side-h">You get <span class="muted">— their cards</span><span class="side-sum" id="get-sum">$0.00</span></div>
       <div id="get"></div>
+      <div class="offer-line" id="get-mkt-row" hidden><span>Market value taken in</span><span id="get-mkt">$0.00</span></div>
       <div class="offer-line sug" style="border-bottom:1px solid var(--line)">
         <span>Credit their cards at</span>
         <span class="pct-ctl">
@@ -75,6 +85,7 @@ export async function render(root, ctx) {
 
     <section class="offer" id="bal" hidden>
       <div class="offer-line"><span>You give</span><span class="offer-mkt" id="b-give">$0.00</span></div>
+      <div class="offer-line"><span>Their cards (market)</span><span id="b-get-mkt">$0.00</span></div>
       <div class="offer-line"><span id="b-get-k">You get (credited)</span><span class="offer-sug" id="b-get">$0.00</span></div>
       <div class="bal-net" id="b-net">Even trade</div>
       <div class="row" style="margin-top:6px">
@@ -88,8 +99,8 @@ export async function render(root, ctx) {
     </section>
 
     <div class="card" id="terms" hidden>
-      <label>Show / event</label>
-      <input id="event" list="events" value="${esc(currentShow)}" placeholder="Type a show name…" />
+      <label>Source</label>
+      <input id="event" list="events" value="${esc(currentShow)}" placeholder="Show, Facebook Marketplace, eBay…" />
       <datalist id="events">${events.map((e) => `<option value="${esc(e)}">`).join('')}</datalist>
       <label>Notes (optional)</label>
       <input id="note" placeholder="e.g. even trade · he threw in sleeves" autocomplete="off" />
@@ -111,7 +122,7 @@ export async function render(root, ctx) {
       saveDraft(ctx.store, 'trade', {
         giveLines: giveLines.map((l) => ({ item_id: l.item.item_id, quantity: l.quantity, agreed_value_cents: l.agreed_value_cents })),
         getLines: getLines.map((l) => ({ fields: l.fields, quantity: l.quantity, market_value_cents: l.market_value_cents })),
-        pct, cash_cents: cashCents, cash_direction: cashDir, event: $('#event') ? $('#event').value : currentShow, note: $('#note') ? $('#note').value : '',
+        pct, cash_cents: cashCents, cash_direction: cashDir, cash_overridden: cashOverridden, event: $('#event') ? $('#event').value : currentShow, note: $('#note') ? $('#note').value : '',
       });
     } else clearDraft(ctx.store, 'trade');
   };
@@ -185,8 +196,12 @@ export async function render(root, ctx) {
     const has = giveLines.length > 0 || getLines.length > 0;
     $('#bal').hidden = !has; $('#terms').hidden = !has; $('#present').disabled = !has; $('#save').disabled = !has;
     const g = giveTotal(); const t = getTotal(); const d = diff();
+    const mkt = getMarketTotal();
     $('#give-sum').textContent = formatCents(g);
     $('#get-sum').textContent = formatCents(t);
+    $('#get-mkt').textContent = formatCents(mkt);
+    $('#get-mkt-row').hidden = getLines.length === 0;
+    $('#b-get-mkt').textContent = formatCents(mkt);
     $('#b-give').textContent = formatCents(g);
     $('#b-get').textContent = formatCents(t);
     $('#b-get-k').textContent = `You get (credited @${pct}%)`;
@@ -242,6 +257,8 @@ export async function render(root, ctx) {
   $('#tpct-dn').onclick = () => setPct(pct - 5);
   $('#cash').oninput = () => { cashOverridden = true; cashCents = dollarsToCents($('#cash').value); updateTotals(); };
   $('#dir').onchange = () => { cashOverridden = true; cashDir = $('#dir').value; updateTotals(); };
+  // Tap "· auto" to hand the cash amount back to the auto-calculation.
+  $('#cash-reset').onclick = () => { cashOverridden = false; updateTotals(); };
   $('#event').addEventListener('input', snapshot);
   $('#note').addEventListener('input', snapshot);
 

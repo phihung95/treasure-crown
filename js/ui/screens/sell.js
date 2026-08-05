@@ -43,8 +43,8 @@ export async function render(root, ctx) {
       <div class="muted" id="lot-split" style="margin:6px 0"></div>
       <label>Payment</label>
       <select id="lot-pay">${PAYMENT_METHODS.map((p) => `<option value="${p}">${payLabel(p)}</option>`).join('')}</select>
-      <label>Show / event</label>
-      <input id="lot-event" list="events" value="${currentShow}" placeholder="Type a show name…" />
+      <label>Source</label>
+      <input id="lot-event" list="events" value="${currentShow}" placeholder="Show, Facebook Marketplace, eBay…" />
       <label>Notes (optional)</label>
       <input id="lot-note" placeholder="e.g. bundle deal" autocomplete="off" />
       <button class="btn" id="lot-do" disabled>Record lot sale</button>
@@ -66,8 +66,8 @@ export async function render(root, ctx) {
       </div>
       <label>Payment</label>
       <select id="pay">${PAYMENT_METHODS.map((p) => `<option value="${p}">${payLabel(p)}</option>`).join('')}</select>
-      <label>Show / event</label>
-      <input id="event" list="events" value="${currentShow}" placeholder="Type a show name…" />
+      <label>Source</label>
+      <input id="event" list="events" value="${currentShow}" placeholder="Show, Facebook Marketplace, eBay…" />
       <datalist id="events">${events.map((e) => `<option value="${e}">`).join('')}</datalist>
       <label>Notes (optional)</label>
       <input id="note" placeholder="e.g. corner ding · holding for pickup" autocomplete="off" />
@@ -317,7 +317,7 @@ export async function render(root, ctx) {
       </div>
       <label>Payment</label>
       <select data-epay>${PAYMENT_METHODS.map((p) => `<option value="${p}" ${p === s.payment_method ? 'selected' : ''}>${payLabel(p)}</option>`).join('')}</select>
-      <label>Show / event</label>
+      <label>Source</label>
       <input data-eev list="events" value="${esc(s.event || '')}" />
       <label>Notes</label>
       <input data-enote value="${esc(s.notes || '')}" placeholder="optional" />

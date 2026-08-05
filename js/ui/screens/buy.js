@@ -38,7 +38,10 @@ export async function render(root, ctx) {
   const suggested = () => suggestedOfferCents(lines, pct);
 
   root.innerHTML = `
-    <h1>Buy</h1>
+    <div class="seg seg-wide" role="tablist" aria-label="Buy or trade">
+      <a class="seg-btn on" href="#/buy" role="tab" aria-selected="true">Buy</a>
+      <a class="seg-btn" href="#/trade" role="tab" aria-selected="false">Trade</a>
+    </div>
 
     <div class="card">
       <label>Add a card the customer is selling</label>
@@ -81,8 +84,8 @@ export async function render(root, ctx) {
       <div class="row">
         <div><label>Payment (money out)</label>
           <select id="pay">${PAYMENT_METHODS.map((p) => `<option value="${p}">${payLabel(p)}</option>`).join('')}</select></div>
-        <div><label>Show / event</label>
-          <input id="event" list="events" value="${esc(currentShow)}" placeholder="Type a show name…" />
+        <div><label>Source</label>
+          <input id="event" list="events" value="${esc(currentShow)}" placeholder="Show, Facebook Marketplace, eBay…" />
           <datalist id="events">${events.map((e) => `<option value="${esc(e)}">`).join('')}</datalist></div>
       </div>
       <label>Notes (optional)</label>

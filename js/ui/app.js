@@ -4,7 +4,7 @@ import { createSync } from '../data/sync.js';
 import { createAuth } from '../data/auth.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 
-const ROUTES = ['dashboard', 'shows', 'inventory', 'buy', 'sell', 'trade', 'prints', 'expenses', 'cash', 'settings'];
+const ROUTES = ['dashboard', 'shows', 'inventory', 'buy', 'sell', 'trade', 'prints', 'expenses', 'cash', 'import', 'settings'];
 
 // On the hosted site, talk to Supabase through our OWN domain (/api proxy)
 // instead of supabase.co directly — some managed networks/MDM block the
@@ -224,10 +224,13 @@ async function boot() {
     const name = (location.hash.replace('#/', '') || 'dashboard');
     const screen = ROUTES.includes(name) ? name : 'dashboard';
     document.querySelectorAll('.tabbar a').forEach((a) => {
-      a.classList.toggle('active', a.getAttribute('href') === `#/${screen}`);
+      const href = a.getAttribute('href');
+      // Buy and Trade share one tab (#/buy); highlight it on either route.
+      const on = href === `#/${screen}` || (href === '#/buy' && screen === 'trade');
+      a.classList.toggle('active', on);
     });
     const moreBtn = document.getElementById('tab-more');
-    if (moreBtn) moreBtn.classList.toggle('active', ['shows', 'cash', 'expenses', 'prints', 'settings'].includes(screen));
+    if (moreBtn) moreBtn.classList.toggle('active', ['shows', 'cash', 'expenses', 'prints', 'import', 'settings'].includes(screen));
     const sheet = document.getElementById('more-sheet');
     if (sheet) sheet.hidden = true;
     const root = document.getElementById('screen');
