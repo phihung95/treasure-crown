@@ -116,13 +116,25 @@ export async function render(root, ctx) {
 
   const $ = (s) => root.querySelector(s);
 
-  // Auto-save the in-progress trade so a reload/crash mid-entry doesn't lose it.
+  // The half-typed "add a card" entry (name/value not yet added to the trade).
+  const pendingGet = () => ({
+    name: $('#t-name') ? $('#t-name').value : '',
+    category: $('#t-cat') ? $('#t-cat').value : '',
+    quantity: $('#t-qty') ? $('#t-qty').value : '',
+    market_value: $('#t-mv') ? $('#t-mv').value : '',
+  });
+
+  // Auto-save the in-progress trade so a reload / leaving the page mid-entry
+  // doesn't lose it — including a card you've typed but not yet added.
   const snapshot = () => {
-    if (giveLines.length || getLines.length) {
+    const pending = pendingGet();
+    const hasPending = pending.name.trim() !== '' || (pending.market_value || '').trim() !== '';
+    if (giveLines.length || getLines.length || hasPending) {
       saveDraft(ctx.store, 'trade', {
         giveLines: giveLines.map((l) => ({ item_id: l.item.item_id, quantity: l.quantity, agreed_value_cents: l.agreed_value_cents })),
         getLines: getLines.map((l) => ({ fields: l.fields, quantity: l.quantity, market_value_cents: l.market_value_cents })),
         pct, cash_cents: cashCents, cash_direction: cashDir, cash_overridden: cashOverridden, event: $('#event') ? $('#event').value : currentShow, note: $('#note') ? $('#note').value : '',
+        pending,
       });
     } else clearDraft(ctx.store, 'trade');
   };
@@ -250,6 +262,11 @@ export async function render(root, ctx) {
     renderGet(); updateTotals();
   };
   $('#t-mv').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#add-get').click(); });
+  // Persist the half-typed card entry as you type, so leaving the page keeps it.
+  $('#t-name').addEventListener('input', snapshot);
+  $('#t-qty').addEventListener('input', snapshot);
+  $('#t-mv').addEventListener('input', snapshot);
+  $('#t-cat').addEventListener('change', snapshot);
 
   const setPct = (v) => { pct = Math.max(1, Math.min(100, v || 0)); $('#tpct').value = pct; renderGet(); updateTotals(); };
   $('#tpct').oninput = () => setPct(parseInt($('#tpct').value, 10));
@@ -390,6 +407,15 @@ export async function render(root, ctx) {
   renderGive(); renderGet(); updateTotals();
   if (cashOverridden) { $('#cash').value = (cashCents / 100).toFixed(2); $('#dir').value = cashDir; }
   if (seedNote != null) $('#note').value = seedNote;
+  // Restore a card that was typed into the "add" form but not yet added.
+  if (seed && seed.pending) {
+    const p = seed.pending;
+    if (p.name) $('#t-name').value = p.name;
+    if (p.category) $('#t-cat').value = p.category;
+    if (p.quantity) $('#t-qty').value = p.quantity;
+    if (p.market_value) $('#t-mv').value = p.market_value;
+    snapshot(); // re-persist (the initial snapshot ran before this restore)
+  }
   renderRecentTrades();
   // After tapping Edit on a recent trade (at the bottom), scroll up so the
   // reloaded sides are visible instead of looking like the trade vanished.
