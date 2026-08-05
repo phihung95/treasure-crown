@@ -319,7 +319,7 @@ export async function render(root, ctx) {
       const ids = await ctx.sync.makeIds();
       res = processTrade({
         giveLines,
-        getLines: getLines.map((l) => ({ fields: l.fields, quantity: l.quantity, agreed_value_cents: credited(l) })),
+        getLines: getLines.map((l) => ({ fields: l.fields, quantity: l.quantity, agreed_value_cents: credited(l), market_value_cents: l.market_value_cents })),
         cash_cents: cashCents, cash_direction: cashDir,
         date: new Date().toISOString().slice(0, 10), event: $('#event').value.trim(),
         notes: [$('#note').value.trim(), `credit ${pct}% of market`].filter(Boolean).join(' · '),
@@ -388,7 +388,7 @@ export async function render(root, ctx) {
       ctx.prefill = {
         screen: 'trade',
         giveLines: giveSales.map((s) => ({ item_id: s.item_id, quantity: s.quantity, agreed_value_cents: s.unit_price_cents })),
-        getLines: receivedOf(t).map((i) => ({ fields: { name: i.name, category: i.category }, quantity: i.quantity_on_hand, market_value_cents: usedPct ? Math.round((i.unit_cost_cents * 100) / usedPct) : i.unit_cost_cents })),
+        getLines: receivedOf(t).map((i) => ({ fields: { name: i.name, category: i.category }, quantity: i.quantity_on_hand, market_value_cents: i.market_value_cents || (usedPct ? Math.round((i.unit_cost_cents * 100) / usedPct) : i.unit_cost_cents) })),
         pct: usedPct, cash_cents: t.cash_cents || 0, cash_direction: t.cash_direction || 'customer_pays_me', event: t.event,
       };
       await reverse(t);

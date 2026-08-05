@@ -65,6 +65,10 @@ export function processTrade({ giveLines, getLines, cash_cents, cash_direction, 
       ...line.fields,
       quantity_on_hand: line.quantity,
       unit_cost_cents: line.agreed_value_cents,
+      // A card taken in keeps its full market value (what it's worth), so it
+      // counts toward inventory/business value — its cost is the credited amount.
+      // Fall back to the credited value if no market was recorded (never 0).
+      market_value_cents: line.market_value_cents ?? line.agreed_value_cents,
       acquisition: 'traded_in',
       source_trade_id: trade_id,
       acquired_date: when,
