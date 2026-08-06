@@ -140,6 +140,27 @@ async function boot() {
     settings = await store.getSettings();
   }
 
+  // Self-heal: a local row with no account_id never reached the shared DB (its
+  // NOT-NULL account check rejected it), so it's stranded on this device only —
+  // which makes devices disagree. Re-tag + queue any such rows so the flush below
+  // finally pushes them. Runs cheaply once; after the first heal there's nothing left.
+  if (currentAccountId) {
+    const HEAL_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses'];
+    let healed = 0;
+    for (const tab of HEAL_TABS) {
+      let rows; try { rows = await store.getAll(tab); } catch { continue; }
+      for (const r of rows) {
+        if (r && !r.account_id) {
+          const fixed = { ...r, account_id: currentAccountId };
+          await store.put(tab, fixed);
+          await sync.enqueue({ kind: 'put', tab, row: fixed });
+          healed += 1;
+        }
+      }
+    }
+    if (healed) console.log(`[tcc] re-tagged ${healed} untagged local record(s) for sync`);
+  }
+
   const pending = async () => { try { return (await store.getAll('queue')).length; } catch { return 0; } };
 
   const ctx = {
