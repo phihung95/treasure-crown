@@ -64,6 +64,8 @@ export async function render(root, ctx) {
       <p class="muted" style="margin-top:6px">Connects this device to your shared database. Same URL + key on every device.</p>
       <button class="btn" id="save">Save &amp; connect</button>
       <button class="btn secondary" id="pull">Pull now</button>
+      <button class="btn ghost" id="repair">🔧 Repair sync</button>
+      <p class="muted" style="margin-top:4px">Different totals on another device? Tap this to re-upload anything stuck on this device to the shared database.</p>
     </div>
 
     <div class="card">
@@ -132,6 +134,39 @@ export async function render(root, ctx) {
   root.querySelector('#pull').onclick = async () => {
     try { await ctx.sync.pull(); ctx.toast('Pulled from Sheet'); ctx.refresh(); }
     catch { ctx.toast('Could not reach backend'); }
+  };
+
+  // Repair sync: re-tag any local record missing its account_id (which is why it
+  // never uploaded), push it up, THEN pull — so stranded records finally land in
+  // the shared DB and stop causing per-device disagreements. Push-before-pull so
+  // the local-only rows are safely uploaded before anything is overwritten.
+  root.querySelector('#repair').onclick = async () => {
+    const btn = root.querySelector('#repair');
+    const acct = ctx.settings.account_id;
+    if (!acct) { ctx.toast('Not signed in to an account yet'); return; }
+    btn.disabled = true; btn.textContent = 'Repairing…';
+    try {
+      const TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses'];
+      let n = 0;
+      for (const tab of TABS) {
+        let rows; try { rows = await ctx.store.getAll(tab); } catch { continue; }
+        for (const r of rows) {
+          if (r && !r.account_id) {
+            const fixed = { ...r, account_id: acct };
+            await ctx.store.put(tab, fixed);
+            await ctx.sync.enqueue({ kind: 'put', tab, row: fixed });
+            n += 1;
+          }
+        }
+      }
+      await ctx.sync.flush();
+      await ctx.sync.pull();
+      ctx.toast(n ? `Re-uploaded ${n} stuck record(s)` : 'Nothing stuck — all synced');
+      ctx.refresh();
+    } catch {
+      ctx.toast('Could not reach the database — try again on wifi');
+      btn.disabled = false; btn.textContent = '🔧 Repair sync';
+    }
   };
 
   root.querySelector('#add-fil').onclick = async () => {
