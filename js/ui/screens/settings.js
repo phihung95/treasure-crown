@@ -146,22 +146,24 @@ export async function render(root, ctx) {
     if (!acct) { ctx.toast('Not signed in to an account yet'); return; }
     btn.disabled = true; btn.textContent = 'Repairing…';
     try {
+      // Re-upload EVERYTHING on this device (not only untagged rows) so any record
+      // that never reached the shared DB — for whatever reason — is pushed up
+      // BEFORE the pull, guaranteeing no local-only card is overwritten/lost.
       const TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses'];
       let n = 0;
       for (const tab of TABS) {
         let rows; try { rows = await ctx.store.getAll(tab); } catch { continue; }
         for (const r of rows) {
-          if (r && !r.account_id) {
-            const fixed = { ...r, account_id: acct };
-            await ctx.store.put(tab, fixed);
-            await ctx.sync.enqueue({ kind: 'put', tab, row: fixed });
-            n += 1;
-          }
+          if (!r) continue;
+          const fixed = { ...r, account_id: r.account_id || acct };
+          await ctx.store.put(tab, fixed);
+          await ctx.sync.enqueue({ kind: 'put', tab, row: fixed });
+          n += 1;
         }
       }
-      await ctx.sync.flush();
-      await ctx.sync.pull();
-      ctx.toast(n ? `Re-uploaded ${n} stuck record(s)` : 'Nothing stuck — all synced');
+      await ctx.sync.flush(); // push all of it up first…
+      await ctx.sync.pull();  // …then pull, so nothing local is lost
+      ctx.toast(`Re-uploaded ${n} record(s) — all devices now match`);
       ctx.refresh();
     } catch {
       ctx.toast('Could not reach the database — try again on wifi');
