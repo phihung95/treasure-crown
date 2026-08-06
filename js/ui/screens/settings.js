@@ -1,5 +1,6 @@
 import { dollarsToCents, centsInputValue, formatCents } from '../format.js';
 import { toCsv } from '../../core/csv.js';
+import { APP_VERSION } from '../../config.js';
 
 async function save(ctx, tab, row) {
   await ctx.store.put(tab, row);
@@ -94,6 +95,8 @@ export async function render(root, ctx) {
       </div>
       <button class="btn secondary" id="add-fil">Add filament</button>
     </div>
+
+    <p class="muted" style="text-align:center;margin:16px 0 4px">Treasure Crown · App version <strong>${esc(APP_VERSION)}</strong></p>
   `;
 
   root.querySelector('#save').onclick = async () => {
