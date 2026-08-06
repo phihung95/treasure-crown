@@ -34,7 +34,6 @@ const BACKUP_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 
 
 export async function render(root, ctx) {
   const s = ctx.settings;
-  const filaments = await ctx.store.getAll('filaments');
 
   const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const acct = ctx.auth && ctx.auth.email ? ctx.auth.email() : '';
@@ -81,19 +80,6 @@ export async function render(root, ctx) {
       <h1 style="font-size:16px">Import</h1>
       <p class="muted" style="margin-bottom:8px">Refresh market values from a Collectr export. Previews every change before anything is saved.</p>
       <a class="btn secondary" href="#/import" style="text-decoration:none">⤒ Import from Collectr</a>
-    </div>
-
-    <div class="card">
-      <h1 style="font-size:16px">Filaments</h1>
-      <div id="fil-list">${filaments.map((f) => `
-        <div class="list-item"><span>${f.name} <span class="chip">${f.color || ''}</span></span>
-        <span class="muted">${formatCents(f.cost_per_kg_cents)}/kg</span></div>`).join('') || '<p class="muted">None yet.</p>'}</div>
-      <label>Add filament — name</label><input id="f-name" placeholder="Bambu PLA Black" />
-      <div class="row">
-        <div><label>Color</label><input id="f-color" placeholder="black" /></div>
-        <div><label>$/kg</label><input id="f-rate" inputmode="decimal" placeholder="25.00" /></div>
-      </div>
-      <button class="btn secondary" id="add-fil">Add filament</button>
     </div>
 
     <p class="muted" style="text-align:center;margin:16px 0 4px">Treasure Crown · App version <strong>${esc(APP_VERSION)}</strong></p>
@@ -174,19 +160,4 @@ export async function render(root, ctx) {
     }
   };
 
-  root.querySelector('#add-fil').onclick = async () => {
-    const name = root.querySelector('#f-name').value.trim();
-    if (!name) { ctx.toast('Name required'); return; }
-    const ids = await ctx.sync.makeIds();
-    const row = {
-      filament_id: ids.filament(),
-      name,
-      color: root.querySelector('#f-color').value.trim(),
-      cost_per_kg_cents: dollarsToCents(root.querySelector('#f-rate').value),
-    };
-    await save(ctx, 'filaments', row);
-    await ctx.sync.commitIds();
-    await ctx.syncNow();
-    ctx.refresh();
-  };
 }
