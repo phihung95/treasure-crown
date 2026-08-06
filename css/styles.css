@@ -80,6 +80,9 @@ input, select, textarea { width:100%; padding:12px; border:1px solid var(--line)
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--gold); outline-offset:1px; border-color:var(--gold); }
 
 /* ---- Buttons: gold primary ---- */
+/* The hidden attribute must always win, even over components that set display
+   (e.g. .btn is inline-block, which would otherwise defeat [hidden]). */
+[hidden] { display:none !important; }
 .btn { display:inline-block; width:100%; padding:14px; border:none; border-radius:12px; background:var(--gold); color:var(--ink); font-weight:800; margin-top:14px; cursor:pointer; letter-spacing:.2px; }
 .btn:hover { background:#b8912f; } .btn:active { background:var(--gold-deep); }
 .btn.secondary { background:var(--surface); color:var(--ink); border:1px solid var(--gold); }

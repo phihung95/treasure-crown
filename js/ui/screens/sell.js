@@ -48,6 +48,7 @@ export async function render(root, ctx) {
       <label>Notes (optional)</label>
       <input id="lot-note" placeholder="e.g. bundle deal" autocomplete="off" />
       <button class="btn" id="lot-do" disabled>Record lot sale</button>
+      <button class="btn ghost" id="lot-clear" hidden>Clear lot</button>
     </section>
     <div id="form" hidden>
       <div id="sel"></div>
@@ -119,6 +120,7 @@ export async function render(root, ctx) {
   const renderLot = () => {
     const cart = root.querySelector('#lot-cart');
     const doBtn = root.querySelector('#lot-do');
+    root.querySelector('#lot-clear').hidden = !lot.length;
     if (!lot.length) {
       cart.innerHTML = '<p class="muted">Search above and tap cards to add them to the lot.</p>';
       root.querySelector('#lot-split').textContent = ''; doBtn.disabled = true; return;
@@ -219,6 +221,19 @@ export async function render(root, ctx) {
     renderResults(); renderLot();
   };
   $('#lot-price').addEventListener('input', () => { lotPriceEdited = true; renderLot(); });
+  // Clear the whole lot (two-tap so a stray press never wipes the bundle).
+  const lotClearBtn = $('#lot-clear');
+  lotClearBtn.onclick = () => {
+    if (!lotClearBtn.dataset.armed) {
+      lotClearBtn.dataset.armed = '1'; lotClearBtn.textContent = 'Discard?'; lotClearBtn.classList.add('danger');
+      setTimeout(() => { if (lotClearBtn.isConnected && lotClearBtn.dataset.armed) { delete lotClearBtn.dataset.armed; lotClearBtn.textContent = 'Clear lot'; lotClearBtn.classList.remove('danger'); } }, 3000);
+      return;
+    }
+    lot.length = 0; lotPriceEdited = false;
+    $('#lot-price').value = '0.00';
+    renderLot(); renderResults();
+    ctx.toast('Lot cleared');
+  };
   $('#lot-do').onclick = async () => {
     if (!lot.length) return;
     const price = dollarsToCents($('#lot-price').value);

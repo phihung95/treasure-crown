@@ -95,7 +95,7 @@ export async function render(root, ctx) {
     <div id="recent-buys"></div>
 
     <div class="total-bar">
-      <button class="btn ghost" style="width:auto;margin:0" id="cancel" hidden>Cancel</button>
+      <button class="btn ghost" style="width:auto;margin:0" id="cancel" hidden>Clear</button>
       <button class="btn secondary" style="width:auto;margin:0" id="present" disabled>Show customer</button>
       <button class="btn" style="width:auto;margin:0" id="save" disabled>${pre ? 'Save changes' : 'Record buy'}</button>
     </div>
@@ -206,7 +206,7 @@ export async function render(root, ctx) {
   cancelBtn.onclick = async () => {
     if (!cancelBtn.dataset.armed) {
       cancelBtn.dataset.armed = '1'; cancelBtn.textContent = 'Discard?'; cancelBtn.classList.add('danger');
-      setTimeout(() => { if (cancelBtn.isConnected && cancelBtn.dataset.armed) { delete cancelBtn.dataset.armed; cancelBtn.textContent = 'Cancel'; cancelBtn.classList.remove('danger'); } }, 3000);
+      setTimeout(() => { if (cancelBtn.isConnected && cancelBtn.dataset.armed) { delete cancelBtn.dataset.armed; cancelBtn.textContent = 'Clear'; cancelBtn.classList.remove('danger'); } }, 3000);
       return;
     }
     lines.length = 0; editing = -1; overridden = false; finalCents = 0;

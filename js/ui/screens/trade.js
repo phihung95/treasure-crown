@@ -109,6 +109,7 @@ export async function render(root, ctx) {
     <div id="recent-trades"></div>
 
     <div class="total-bar">
+      <button class="btn ghost" style="width:auto;margin:0" id="clear" hidden>Clear</button>
       <button class="btn secondary" style="width:auto;margin:0" id="present" disabled>Show customer</button>
       <button class="btn" style="width:auto;margin:0" id="save" disabled>${pre ? 'Save changes' : 'Save trade'}</button>
     </div>
@@ -207,6 +208,7 @@ export async function render(root, ctx) {
   const updateTotals = () => {
     const has = giveLines.length > 0 || getLines.length > 0;
     $('#bal').hidden = !has; $('#terms').hidden = !has; $('#present').disabled = !has; $('#save').disabled = !has;
+    $('#clear').hidden = !has;
     const g = giveTotal(); const t = getTotal(); const d = diff();
     const mkt = getMarketTotal();
     $('#give-sum').textContent = formatCents(g);
@@ -276,6 +278,26 @@ export async function render(root, ctx) {
   $('#dir').onchange = () => { cashOverridden = true; cashDir = $('#dir').value; updateTotals(); };
   // Tap "· auto" to hand the cash amount back to the auto-calculation.
   $('#cash-reset').onclick = () => { cashOverridden = false; updateTotals(); };
+
+  // Clear the whole in-progress trade (both sides + the pending entry). Two-tap
+  // so a stray press never wipes cards you've entered.
+  const clearBtn = $('#clear');
+  clearBtn.onclick = async () => {
+    if (!clearBtn.dataset.armed) {
+      clearBtn.dataset.armed = '1'; clearBtn.textContent = 'Discard?'; clearBtn.classList.add('danger');
+      setTimeout(() => { if (clearBtn.isConnected && clearBtn.dataset.armed) { delete clearBtn.dataset.armed; clearBtn.textContent = 'Clear'; clearBtn.classList.remove('danger'); } }, 3000);
+      return;
+    }
+    giveLines.length = 0; getLines.length = 0; editingGet = -1;
+    pct = Number(ctx.settings.buy_percent) || 80;
+    cashOverridden = false; cashCents = 0; cashDir = 'customer_pays_me';
+    await clearDraft(ctx.store, 'trade');
+    $('#t-name').value = ''; $('#t-qty').value = '1'; $('#t-mv').value = '';
+    $('#g-q').value = ''; $('#g-res').innerHTML = '';
+    $('#note').value = ''; $('#tpct').value = pct;
+    renderGive(); renderGet(); updateTotals();
+    ctx.toast('Trade cleared');
+  };
   $('#event').addEventListener('input', snapshot);
   $('#note').addEventListener('input', snapshot);
 
