@@ -38,7 +38,7 @@ export async function render(root, ctx) {
   const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const acct = ctx.auth && ctx.auth.email ? ctx.auth.email() : '';
   root.innerHTML = `
-    <h1>Setup</h1>
+    <h1>Settings</h1>
     ${acct ? `<div class="card acct-card"><span class="muted">Signed in as <strong style="color:var(--ink)">${esc(acct)}</strong></span>
       <button class="btn ghost" id="signout" style="width:auto;margin:0">Sign out</button></div>` : ''}
     <div class="card">
@@ -80,6 +80,18 @@ export async function render(root, ctx) {
       <h1 style="font-size:16px">Import</h1>
       <p class="muted" style="margin-bottom:8px">Refresh market values from a Collectr export. Previews every change before anything is saved.</p>
       <a class="btn secondary" href="#/import" style="text-decoration:none">⤒ Import from Collectr</a>
+    </div>
+
+    <div class="card" style="border-color:var(--neg)">
+      <h1 style="font-size:16px;color:var(--neg)">Reset</h1>
+      <p class="muted" style="margin-bottom:10px">Permanently delete <strong>all</strong> business data — inventory, sales, buys, trades, expenses, and cash. This clears the <strong>shared database</strong>, so it wipes it for your partner and every device. It can't be undone. Download a Full backup above first if you might want it.</p>
+      <button class="btn ghost" id="reset-btn" style="border-color:var(--neg);color:var(--neg)">Reset — delete all data</button>
+      <div id="reset-confirm" hidden style="margin-top:12px">
+        <label>Type <strong>DELETE</strong> to confirm</label>
+        <input id="reset-word" placeholder="DELETE" autocomplete="off" autocapitalize="characters" />
+        <button class="btn" id="reset-go" disabled style="background:var(--neg);color:#fff">Permanently delete everything</button>
+        <button class="btn ghost" id="reset-cancel">Cancel</button>
+      </div>
     </div>
 
     <p class="muted" style="text-align:center;margin:16px 0 4px">Treasure Crown · App version <strong>${esc(APP_VERSION)}</strong></p>
@@ -158,6 +170,31 @@ export async function render(root, ctx) {
       ctx.toast('Could not reach the database — try again on wifi');
       btn.disabled = false; btn.textContent = '🔧 Repair sync';
     }
+  };
+
+  // Full reset: gated behind a typed "DELETE" so it can never fire by accident.
+  const resetBtn = root.querySelector('#reset-btn');
+  const resetConfirm = root.querySelector('#reset-confirm');
+  const resetWord = root.querySelector('#reset-word');
+  const resetGo = root.querySelector('#reset-go');
+  resetBtn.onclick = () => { resetConfirm.hidden = false; resetBtn.hidden = true; resetWord.focus(); };
+  root.querySelector('#reset-cancel').onclick = () => { resetConfirm.hidden = true; resetBtn.hidden = false; resetWord.value = ''; resetGo.disabled = true; };
+  resetWord.oninput = () => { resetGo.disabled = resetWord.value.trim().toUpperCase() !== 'DELETE'; };
+  resetGo.onclick = async () => {
+    if (resetWord.value.trim().toUpperCase() !== 'DELETE') return;
+    resetGo.disabled = true; resetGo.textContent = 'Deleting…';
+    try {
+      await ctx.api.clearAll(); // wipe the shared DB (RLS-scoped to this account)
+    } catch {
+      ctx.toast('Could not reach the database — reset needs a connection');
+      resetGo.disabled = false; resetGo.textContent = 'Permanently delete everything';
+      return;
+    }
+    // Clear local copies + the queue so nothing gets re-uploaded on the next boot.
+    const TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses', 'queue'];
+    for (const t of TABS) { try { await ctx.store.clear(t); } catch { /* store may lack this table */ } }
+    ctx.toast('All data deleted');
+    setTimeout(() => location.reload(), 600);
   };
 
 }

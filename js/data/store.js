@@ -40,6 +40,7 @@ export async function openStore() {
       await Promise.all(rows.map((r) => wrap(store.put(r))));
     },
     async remove(tab, id) { await wrap(tx(db, tab, 'readwrite').delete(id)); },
+    async clear(tab) { await wrap(tx(db, tab, 'readwrite').clear()); },
     async getSettings() {
       const s = await wrap(db.transaction('meta', 'readonly').objectStore('meta').get('settings'));
       return { ...DEFAULT_SETTINGS, ...(s || {}) };

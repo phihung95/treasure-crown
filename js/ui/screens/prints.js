@@ -31,7 +31,7 @@ export async function render(root, ctx) {
 
   root.innerHTML = `
     <h1>3D Prints</h1>
-    ${filaments.length === 0 ? '<p class="muted">Add filaments in Setup first.</p>' : ''}
+    ${filaments.length === 0 ? '<p class="muted">Add filaments in Settings first.</p>' : ''}
     <div id="products">${products.map((p) => {
       const c = unitCost(p, partsFor(p.print_product_id));
       return `<div class="card"><div class="list-item" style="border:0;margin:0;padding:0">

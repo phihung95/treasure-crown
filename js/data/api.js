@@ -36,6 +36,19 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
     if (!res.ok) throw new Error(`backend error: ${res.status}`);
   }
 
+  // Delete EVERY row of a table the caller can see (RLS scopes this to their own
+  // account, so it never touches another tenant's data). The filter matches all
+  // rows since a primary key is never null. Used by the full-reset flow.
+  async function clearTable(tab) {
+    ensure();
+    const field = ID_FIELD[tab];
+    const res = await doFetch(`${base}/${tab}?${field}=not.is.null`, {
+      method: 'DELETE',
+      headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
+    });
+    if (!res.ok) throw new Error(`backend error: ${res.status}`);
+  }
+
   // Delete a single row by its primary key (e.g. voiding a sale).
   async function del(tab, id) {
     const field = ID_FIELD[tab];
@@ -83,6 +96,12 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
       for (const tab of Object.keys(byTab)) await upsert(tab, [...byTab[tab].values()]);
       for (const op of deletes) await del(op.tab, op.id);
       return { applied: ops.length };
+    },
+
+    // Wipe every data table for the signed-in account (used by the full reset).
+    async clearAll() {
+      ensure();
+      for (const tab of DATA_TABS) await clearTable(tab);
     },
 
     // Shared id counters live in a single app_meta row so devices don't collide.
