@@ -216,6 +216,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .exp-bar-fill { height:100%; background:var(--gold); border-radius:4px; }
 .exp-cat.on .exp-cat-row span:first-child { color:var(--gold-deep); font-weight:800; }
 .exp-cat.on .exp-bar-fill { background:var(--gold-deep); }
+/* Centered confirmation pop-up (e.g. the full reset) */
+.modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(23,19,11,.55); display:flex; align-items:center; justify-content:center; padding:20px calc(20px + env(safe-area-inset-right)) 20px calc(20px + env(safe-area-inset-left)); }
+.modal-card { width:100%; max-width:360px; background:var(--surface); border-radius:16px; box-shadow:var(--shadow); padding:22px; }
+.modal-card h2 { font-size:19px; margin:0 0 8px; }
+.modal-card p { margin:0 0 12px; }
+.modal-card .btn { margin-top:10px; }
 
 /* Business-value gain on the dark hero */
 .hero-gain.pos { color:var(--pos-dk); font-weight:700; }

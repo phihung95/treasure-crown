@@ -86,12 +86,6 @@ export async function render(root, ctx) {
       <h1 style="font-size:16px;color:var(--neg)">Reset</h1>
       <p class="muted" style="margin-bottom:10px">Permanently delete <strong>all</strong> business data — inventory, sales, buys, trades, expenses, and cash. This clears the <strong>shared database</strong>, so it wipes it for your partner and every device. It can't be undone. Download a Full backup above first if you might want it.</p>
       <button class="btn ghost" id="reset-btn" style="border-color:var(--neg);color:var(--neg)">Reset — delete all data</button>
-      <div id="reset-confirm" hidden style="margin-top:12px">
-        <label>Type <strong>DELETE</strong> to confirm</label>
-        <input id="reset-word" placeholder="DELETE" autocomplete="off" autocapitalize="characters" />
-        <button class="btn" id="reset-go" disabled style="background:var(--neg);color:#fff">Permanently delete everything</button>
-        <button class="btn ghost" id="reset-cancel">Cancel</button>
-      </div>
     </div>
 
     <p class="muted" style="text-align:center;margin:16px 0 4px">Treasure Crown · App version <strong>${esc(APP_VERSION)}</strong></p>
@@ -172,29 +166,44 @@ export async function render(root, ctx) {
     }
   };
 
-  // Full reset: gated behind a typed "DELETE" so it can never fire by accident.
-  const resetBtn = root.querySelector('#reset-btn');
-  const resetConfirm = root.querySelector('#reset-confirm');
-  const resetWord = root.querySelector('#reset-word');
-  const resetGo = root.querySelector('#reset-go');
-  resetBtn.onclick = () => { resetConfirm.hidden = false; resetBtn.hidden = true; resetWord.focus(); };
-  root.querySelector('#reset-cancel').onclick = () => { resetConfirm.hidden = true; resetBtn.hidden = false; resetWord.value = ''; resetGo.disabled = true; };
-  resetWord.oninput = () => { resetGo.disabled = resetWord.value.trim().toUpperCase() !== 'DELETE'; };
-  resetGo.onclick = async () => {
-    if (resetWord.value.trim().toUpperCase() !== 'DELETE') return;
-    resetGo.disabled = true; resetGo.textContent = 'Deleting…';
-    try {
-      await ctx.api.clearAll(); // wipe the shared DB (RLS-scoped to this account)
-    } catch {
-      ctx.toast('Could not reach the database — reset needs a connection');
-      resetGo.disabled = false; resetGo.textContent = 'Permanently delete everything';
-      return;
-    }
-    // Clear local copies + the queue so nothing gets re-uploaded on the next boot.
-    const TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses', 'queue'];
-    for (const t of TABS) { try { await ctx.store.clear(t); } catch { /* store may lack this table */ } }
-    ctx.toast('All data deleted');
-    setTimeout(() => location.reload(), 600);
+  // Full reset behind a pop-up: clicking Reset opens a modal where you must type
+  // "DELETE" — so the wipe can never fire from a single stray tap.
+  root.querySelector('#reset-btn').onclick = () => {
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.innerHTML = `<div class="modal-card">
+      <h2 style="color:var(--neg)">Delete everything?</h2>
+      <p class="muted">This permanently deletes <strong>all</strong> inventory, sales, buys, trades, expenses, and cash — for you, your partner, and every device. It can't be undone.</p>
+      <label>Type <strong>DELETE</strong> to confirm</label>
+      <input id="m-word" placeholder="DELETE" autocomplete="off" autocapitalize="characters" />
+      <button class="btn" id="m-go" disabled style="background:var(--neg);color:#fff">Delete everything</button>
+      <button class="btn ghost" id="m-cancel">Cancel</button>
+    </div>`;
+    document.body.appendChild(ov);
+    const word = ov.querySelector('#m-word');
+    const go = ov.querySelector('#m-go');
+    const close = () => ov.remove();
+    word.focus();
+    word.oninput = () => { go.disabled = word.value.trim().toUpperCase() !== 'DELETE'; };
+    word.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !go.disabled) go.click(); });
+    ov.querySelector('#m-cancel').onclick = close;
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); }); // tap outside to dismiss
+    go.onclick = async () => {
+      if (word.value.trim().toUpperCase() !== 'DELETE') return;
+      go.disabled = true; go.textContent = 'Deleting…';
+      try {
+        await ctx.api.clearAll(); // wipe the shared DB (RLS-scoped to this account)
+      } catch {
+        ctx.toast('Could not reach the database — reset needs a connection');
+        go.disabled = false; go.textContent = 'Delete everything';
+        return;
+      }
+      // Clear local copies + the queue so nothing gets re-uploaded on the next boot.
+      const TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses', 'queue'];
+      for (const t of TABS) { try { await ctx.store.clear(t); } catch { /* store may lack this table */ } }
+      ctx.toast('All data deleted');
+      setTimeout(() => location.reload(), 600);
+    };
   };
 
 }
