@@ -75,6 +75,10 @@ export async function render(root, ctx) {
       <label>Add a card they're trading in</label>
       <input id="t-name" placeholder="Card you take in" autocomplete="off" />
       <div class="row">
+        <div><label>Set</label><input id="t-set" placeholder="Evolving Skies" autocomplete="off" /></div>
+        <div><label>Card #</label><input id="t-num" placeholder="215/203" autocomplete="off" /></div>
+      </div>
+      <div class="row">
         <div><label>Category</label>
           <select id="t-cat">${CATEGORIES.map((c) => `<option value="${c}">${catLabel(c)}</option>`).join('')}</select></div>
         <div><label>Qty</label><input id="t-qty" inputmode="numeric" value="1" /></div>
@@ -120,6 +124,8 @@ export async function render(root, ctx) {
   // The half-typed "add a card" entry (name/value not yet added to the trade).
   const pendingGet = () => ({
     name: $('#t-name') ? $('#t-name').value : '',
+    set: $('#t-set') ? $('#t-set').value : '',
+    card_number: $('#t-num') ? $('#t-num').value : '',
     category: $('#t-cat') ? $('#t-cat').value : '',
     quantity: $('#t-qty') ? $('#t-qty').value : '',
     market_value: $('#t-mv') ? $('#t-mv').value : '',
@@ -173,6 +179,10 @@ export async function render(root, ctx) {
           <div class="edit-grid">
             <input class="edit-name" data-gen="${i}" value="${esc(l.fields.name)}" aria-label="name" />
             <div class="row">
+              <input data-geset="${i}" value="${esc(l.fields.set || '')}" placeholder="Set" aria-label="set" />
+              <input data-genum="${i}" value="${esc(l.fields.card_number || '')}" placeholder="Card #" aria-label="card number" />
+            </div>
+            <div class="row">
               <select data-gec="${i}" aria-label="category">${CATEGORIES.map((c) => `<option value="${c}" ${c === l.fields.category ? 'selected' : ''}>${catLabel(c)}</option>`).join('')}</select>
               <input data-geq="${i}" inputmode="numeric" value="${l.quantity}" aria-label="qty" />
               <input data-gem="${i}" inputmode="decimal" value="${(l.market_value_cents / 100).toFixed(2)}" aria-label="market value each" />
@@ -180,7 +190,8 @@ export async function render(root, ctx) {
             <button class="btn secondary" data-gdone="${i}">Done</button>
           </div></div>`;
       }
-      return `<div class="list-item"><span>${esc(l.fields.name)} <span class="chip">${catLabel(l.fields.category)}</span>
+      const meta = [l.fields.set, l.fields.card_number ? `#${l.fields.card_number}` : ''].filter(Boolean).join(' · ');
+      return `<div class="list-item"><span>${esc(l.fields.name)} <span class="chip">${catLabel(l.fields.category)}</span>${meta ? `<span class="inv-attr">${esc(meta)}</span>` : ''}
         <div class="muted">${l.quantity > 1 ? `×${l.quantity} · ` : ''}mkt ${formatCents(l.market_value_cents)} → credit <strong>${formatCents(credited(l) * l.quantity)}</strong> @${pct}%</div></span>
         <span class="row-actions">
           <button class="btn ghost row-btn" data-ge="${i}" aria-label="edit">✎</button>
@@ -191,7 +202,7 @@ export async function render(root, ctx) {
     root.querySelectorAll('[data-gdone]').forEach((b) => { b.onclick = () => {
       const i = +b.getAttribute('data-gdone');
       getLines[i] = {
-        fields: { name: $(`[data-gen="${i}"]`).value.trim() || getLines[i].fields.name, category: $(`[data-gec="${i}"]`).value },
+        fields: { name: $(`[data-gen="${i}"]`).value.trim() || getLines[i].fields.name, set: $(`[data-geset="${i}"]`).value.trim(), card_number: $(`[data-genum="${i}"]`).value.trim(), category: $(`[data-gec="${i}"]`).value },
         quantity: parseInt($(`[data-geq="${i}"]`).value, 10) || 1,
         market_value_cents: dollarsToCents($(`[data-gem="${i}"]`).value),
       };
@@ -255,17 +266,19 @@ export async function render(root, ctx) {
     const name = $('#t-name').value.trim();
     if (!name) { ctx.toast('Card name required'); return; }
     getLines.push({
-      fields: { name, category: $('#t-cat').value },
+      fields: { name, set: $('#t-set').value.trim(), card_number: $('#t-num').value.trim(), category: $('#t-cat').value },
       quantity: parseInt($('#t-qty').value, 10) || 1,
       market_value_cents: dollarsToCents($('#t-mv').value),
     });
-    $('#t-name').value = ''; $('#t-qty').value = '1'; $('#t-mv').value = '';
+    $('#t-name').value = ''; $('#t-set').value = ''; $('#t-num').value = ''; $('#t-qty').value = '1'; $('#t-mv').value = '';
     $('#t-name').focus();
     renderGet(); updateTotals();
   };
   $('#t-mv').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#add-get').click(); });
   // Persist the half-typed card entry as you type, so leaving the page keeps it.
   $('#t-name').addEventListener('input', snapshot);
+  $('#t-set').addEventListener('input', snapshot);
+  $('#t-num').addEventListener('input', snapshot);
   $('#t-qty').addEventListener('input', snapshot);
   $('#t-mv').addEventListener('input', snapshot);
   $('#t-cat').addEventListener('change', snapshot);
@@ -292,7 +305,7 @@ export async function render(root, ctx) {
     pct = Number(ctx.settings.buy_percent) || 80;
     cashOverridden = false; cashCents = 0; cashDir = 'customer_pays_me';
     await clearDraft(ctx.store, 'trade');
-    $('#t-name').value = ''; $('#t-qty').value = '1'; $('#t-mv').value = '';
+    $('#t-name').value = ''; $('#t-set').value = ''; $('#t-num').value = ''; $('#t-qty').value = '1'; $('#t-mv').value = '';
     $('#g-q').value = ''; $('#g-res').innerHTML = '';
     $('#note').value = ''; $('#tpct').value = pct;
     renderGive(); renderGet(); updateTotals();
@@ -411,7 +424,7 @@ export async function render(root, ctx) {
       ctx.prefill = {
         screen: 'trade',
         giveLines: giveSales.map((s) => ({ item_id: s.item_id, quantity: s.quantity, agreed_value_cents: s.unit_price_cents })),
-        getLines: receivedOf(t).map((i) => ({ fields: { name: i.name, category: i.category }, quantity: i.quantity_on_hand, market_value_cents: i.market_value_cents || (usedPct ? Math.round((i.unit_cost_cents * 100) / usedPct) : i.unit_cost_cents) })),
+        getLines: receivedOf(t).map((i) => ({ fields: { name: i.name, set: i.set, card_number: i.card_number, category: i.category }, quantity: i.quantity_on_hand, market_value_cents: i.market_value_cents || (usedPct ? Math.round((i.unit_cost_cents * 100) / usedPct) : i.unit_cost_cents) })),
         pct: usedPct, cash_cents: t.cash_cents || 0, cash_direction: t.cash_direction || 'customer_pays_me', event: t.event,
       };
       await reverse(t);
@@ -434,6 +447,8 @@ export async function render(root, ctx) {
   if (seed && seed.pending) {
     const p = seed.pending;
     if (p.name) $('#t-name').value = p.name;
+    if (p.set) $('#t-set').value = p.set;
+    if (p.card_number) $('#t-num').value = p.card_number;
     if (p.category) $('#t-cat').value = p.category;
     if (p.quantity) $('#t-qty').value = p.quantity;
     if (p.market_value) $('#t-mv').value = p.market_value;
