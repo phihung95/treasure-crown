@@ -304,7 +304,7 @@ export async function render(root, ctx) {
   // ---- customer-facing present view ----
   $('#present').onclick = () => {
     const giveRows = giveLines.map((l) => `<div class="present-row"><span class="present-name">${esc(l.item.name)}</span><span class="present-val">${formatCents(l.agreed_value_cents * l.quantity)}</span></div>`).join('') || '<div class="present-line"><span>—</span><span></span></div>';
-    const getRows = getLines.map((l) => `<div class="present-row"><span class="present-name">${esc(l.fields.name)}${l.quantity > 1 ? ` <span class="present-q">×${l.quantity}</span>` : ''}</span><span class="present-val">${formatCents(credited(l) * l.quantity)}</span></div>`).join('') || '<div class="present-line"><span>—</span><span></span></div>';
+    const getRows = getLines.map((l) => `<div class="present-row"><span class="present-name">${esc(l.fields.name)}${l.quantity > 1 ? ` <span class="present-q">×${l.quantity}</span>` : ''}</span><span class="present-val"><span class="present-mkt">${formatCents((l.market_value_cents || 0) * l.quantity)} mkt</span> → ${formatCents(credited(l) * l.quantity)}</span></div>`).join('') || '<div class="present-line"><span>—</span><span></span></div>';
     let cashLabel = 'Even trade — no cash';
     let big = 'EVEN';
     if (cashCents > 0) {
@@ -324,7 +324,8 @@ export async function render(root, ctx) {
         <div class="present-list">${getRows}</div>
         <div class="present-sum">
           <div class="present-line"><span>You receive</span><span>${formatCents(giveTotal())}</span></div>
-          <div class="present-line"><span>Your cards credited</span><span>${formatCents(getTotal())}</span></div>
+          <div class="present-line"><span>Your cards at market</span><span>${formatCents(getMarketTotal())}</span></div>
+          <div class="present-line"><span>Credited @ ${pct}%</span><span>${formatCents(getTotal())}</span></div>
         </div>
         <div class="present-offer-k">${cashLabel}</div>
         <div class="present-offer">${big}</div>

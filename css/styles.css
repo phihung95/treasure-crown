@@ -445,6 +445,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .present-name { font-weight:600; }
 .present-q { color:var(--gold-soft); font-weight:700; font-size:14px; }
 .present-val { font-weight:800; font-variant-numeric:tabular-nums; }
+.present-mkt { color:#b7a888; font-weight:600; font-size:.82em; }
 .present-sum { padding:12px 2px 2px; }
 .present-line { display:flex; justify-content:space-between; gap:12px; padding:5px 0; color:#cdbfa6; font-size:15px; }
 .present-line span:last-child { font-weight:700; color:#f4ecdd; font-variant-numeric:tabular-nums; }
