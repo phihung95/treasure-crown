@@ -127,16 +127,32 @@ async function boot() {
   const session = await auth.restore();
   if (!supaUrl || !session) { renderLogin(store, { ...settings, supabase_url: supaUrl, supabase_key: supaKey }); return; }
 
-  // Resolve the signed-in user's account. A brand-new user has none yet, so
-  // provision one (their first sign-in creates their workspace). Do this BEFORE
-  // any sync so reads/writes are correctly scoped. Offline: keep the cached id.
+  const DATA_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments', 'cash_events', 'expenses'];
+  const email = auth.email();
+  const wipeLocal = async () => {
+    for (const tab of [...DATA_TABS, 'queue']) { try { await store.clear(tab); } catch { /* store may lack this table */ } }
+  };
+
+  // Resolve the signed-in user's account BEFORE any sync so reads/writes are
+  // scoped correctly. getMyAccount() returns their account, null if they belong
+  // to NONE (definitive — RLS scopes it to them), or throws when offline.
   try {
     const remote = await api.getMyAccount();
-    if (remote) currentAccountId = remote;
-    else if (!currentAccountId) currentAccountId = await api.provisionAccount(settings.pending_shop_name || 'My Shop');
-  } catch { /* offline or transient — fall back to the cached account_id */ }
-  if (currentAccountId && (currentAccountId !== settings.account_id || settings.pending_shop_name)) {
-    await store.setSettings({ account_id: currentAccountId, pending_shop_name: '' });
+    if (remote) {
+      // Switching to a different account than what's cached locally? The local
+      // data is the old account's — clear it so the pull loads the right data.
+      if (settings.account_id && settings.account_id !== remote) await wipeLocal();
+      currentAccountId = remote;
+    } else {
+      // No membership → any cached account id belongs to someone else and is
+      // wrong. Drop the old account's local data and provision this user's own
+      // workspace (idempotent: returns their existing account if they have one).
+      if (currentAccountId || settings.account_id) await wipeLocal();
+      currentAccountId = await api.provisionAccount(settings.pending_shop_name || 'My Shop');
+    }
+  } catch { /* offline or transient — keep the cached account_id */ }
+  if (currentAccountId && (currentAccountId !== settings.account_id || settings.account_email !== email || settings.pending_shop_name)) {
+    await store.setSettings({ account_id: currentAccountId, account_email: email || settings.account_email || '', pending_shop_name: '' });
     settings = await store.getSettings();
   }
 
@@ -212,7 +228,14 @@ async function boot() {
     },
     refresh() { route(); },
     auth,
-    async signOut() { await auth.signOut(); location.reload(); },
+    // Clear this account's cached id + local data on sign-out, so signing into a
+    // different account starts clean instead of showing the previous one's data.
+    async signOut() {
+      for (const tab of [...DATA_TABS, 'queue']) { try { await store.clear(tab); } catch { /* store may lack this table */ } }
+      await store.setSettings({ account_id: null, account_email: null });
+      await auth.signOut();
+      location.reload();
+    },
   };
   window.__tcc = ctx;
 
