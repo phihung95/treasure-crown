@@ -119,6 +119,33 @@ const normGrade = (g) => {
 };
 // A card's condition token is its grade when graded, else its raw condition.
 const condToken = (o) => normGrade(o.grade) || normCond(o.condition);
+
+// Map a parsed report row to inventory-item fields, so unmatched cards can be
+// ADDED (not just priced). Grade/condition are folded to this app's vocabulary
+// (NM/LP/…, "PSA 10") so a card added now matches on the next import. Graded
+// cards become slabs; everything else a single. Cost is 0 (Collectr has no cost).
+const COND_DISPLAY = { nm: 'NM', lp: 'LP', mp: 'MP', hp: 'HP', dmg: 'DMG' };
+export function rowToItemFields(row) {
+  const gradeTok = normGrade(row.grade);              // '' when raw, else e.g. "psa 10"
+  const graded = !!gradeTok;
+  const grade = graded ? gradeTok.replace(/^[a-z]+/, (g) => g.toUpperCase()) : ''; // "PSA 10"
+  const grader = graded ? grade.split(' ')[0] : '';
+  const condition = graded ? '' : (COND_DISPLAY[normCond(row.condition)] || '');
+  return {
+    category: graded ? 'slab' : 'single',
+    name: row.name,
+    set: row.set || '',
+    card_number: row.card_number || '',
+    grade,
+    grader,
+    condition,
+    quantity_on_hand: Math.max(parseInt(row.quantity, 10) || 1, 1),
+    unit_cost_cents: 0,
+    market_value_cents: row.market_value_cents ?? 0,
+    acquisition: 'bought',
+    notes: 'Imported from Collectr',
+  };
+}
 // Strict key includes the set; loose key drops it (set naming differs between
 // tools, so loose lets us still match when only the set label disagrees).
 const strictKey = (o) => `${norm(o.name)}|${norm(o.set)}|${norm(o.card_number)}|${condToken(o)}`;

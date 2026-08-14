@@ -1,4 +1,5 @@
-import { parseCollectrCsv, planPriceUpdate } from '../../core/collectr.js';
+import { parseCollectrCsv, planPriceUpdate, rowToItemFields } from '../../core/collectr.js';
+import { newItem } from '../../core/schema.js';
 import { formatCents, catLabel } from '../format.js';
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -11,9 +12,9 @@ export async function render(root, ctx) {
   root.innerHTML = `
     <h1>Import from Collectr</h1>
     <div class="card">
-      <p class="muted" style="margin:0 0 10px">Export your collection from Collectr (PRO → export CSV), then load it here to refresh
-        the <strong>market value</strong> of matching cards. Your cost, quantity, and buy history are never changed.</p>
-      <p class="muted" style="margin:0 0 10px"><strong>1.</strong> Choose the CSV → <strong>2.</strong> review the preview of price changes → <strong>3.</strong> tap <strong>Apply</strong> to save. Nothing changes until you apply.</p>
+      <p class="muted" style="margin:0 0 10px">Export your collection from Collectr (PRO → export CSV), then load it here. Cards you
+        <strong>already hold</strong> get their <strong>market value</strong> refreshed; cards that are <strong>new</strong> can be added to inventory.</p>
+      <p class="muted" style="margin:0 0 10px"><strong>1.</strong> Choose the CSV → <strong>2.</strong> review the preview → <strong>3.</strong> tap <strong>Apply</strong> / <strong>Add</strong> to save. Nothing changes until you do.</p>
       <input type="file" id="file" accept=".csv,text/csv,text/plain" hidden />
       <button class="btn secondary" id="pick">⤒ Choose Collectr CSV…</button>
       <div class="muted" id="fname" style="margin-top:8px" hidden></div>
@@ -73,9 +74,9 @@ export async function render(root, ctx) {
       } else if (matchedCount) {
         body += `<div class="card"><p class="muted" style="margin:0">Every matched card is already up to date — nothing to change.</p></div>`;
       } else {
-        // Nothing matched at all — the usual cause of "what's the next step?".
-        body += `<div class="card"><p style="margin:0 0 6px"><strong>No cards matched your inventory.</strong></p>
-          <p class="muted" style="margin:0">This import refreshes the <strong>market value</strong> of cards you already hold — it doesn't add new cards. None of the ${rowCount} rows in this file matched a card in your inventory, so there's nothing to apply. This usually means the card names, sets, or conditions are labelled differently than in your inventory.</p></div>`;
+        // Nothing matched an existing card — but they can still be added below.
+        body += `<div class="card"><p style="margin:0 0 6px"><strong>None of these are in your inventory yet.</strong></p>
+          <p class="muted" style="margin:0">All ${rowCount} card${rowCount === 1 ? '' : 's'} in this file are new to you — add them below. (When a card already exists, this instead updates its market value.)</p></div>`;
       }
 
       if (unmatched.length) {
@@ -85,8 +86,11 @@ export async function render(root, ctx) {
             <span class="muted">${r.market_value_cents != null ? formatCents(r.market_value_cents) : ''}</span></div>`;
         }).join('');
         const more = unmatched.length > MAX_LIST ? `<div class="muted" style="padding:8px 0">…and ${unmatched.length - MAX_LIST} more</div>` : '';
-        body += `<div class="card"><div class="panel-h">In report, not in inventory (${unmatched.length})</div>
-          <p class="muted" style="margin:0 0 8px">These didn't match any card you hold — added new cards, or a naming difference.</p>${rows}${more}</div>`;
+        body += `<div class="card" style="border-color:var(--gold-deep)">
+          <div class="panel-h">New cards — not in inventory (${unmatched.length})</div>
+          <p style="margin:0 0 10px">These aren't in your inventory yet. Add them as new cards at their Collectr market value (cost $0, quantity from the file).</p>
+          <button class="btn" id="add-new">➕ Add ${unmatched.length} new card${unmatched.length === 1 ? '' : 's'} to inventory</button>
+          <div style="height:6px"></div>${rows}${more}</div>`;
       }
     }
 
@@ -108,6 +112,26 @@ export async function render(root, ctx) {
         <p class="muted" style="margin:0 0 10px">Updated ${n} price${n === 1 ? '' : 's'}. Your Business Value now reflects the new market values.</p>
         <a class="btn" href="#/dashboard">Back to Home</a>
         <a class="btn secondary" href="#/inventory">View inventory</a></div>`;
+    };
+
+    const addBtn = $('#add-new');
+    if (addBtn) addBtn.onclick = async () => {
+      addBtn.disabled = true; addBtn.textContent = 'Adding…';
+      const ids = await ctx.sync.makeIds();
+      let n = 0;
+      for (const r of plan.unmatched) {
+        const row = newItem(rowToItemFields(r), ids.item());
+        await ctx.store.put('items', row);
+        await ctx.sync.enqueue({ kind: 'put', tab: 'items', row });
+        n += 1;
+      }
+      await ctx.sync.commitIds();
+      await ctx.syncNow();
+      ctx.toast(`Added ${n} new card${n === 1 ? '' : 's'}`);
+      box.innerHTML = `<div class="card"><div class="panel-h">Done</div>
+        <p class="muted" style="margin:0 0 10px">Added ${n} new card${n === 1 ? '' : 's'} to inventory at their Collectr market value. Cost is $0 — edit any card if you paid for it.</p>
+        <a class="btn" href="#/inventory">View inventory</a>
+        <a class="btn secondary" href="#/dashboard">Back to Home</a></div>`;
     };
   };
 
