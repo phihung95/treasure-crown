@@ -13,13 +13,18 @@ import { toCents } from './money.js';
 const FIELD_MATCHERS = [
   ['product_id', /(product\s*id|collectr\s*id|tcg\s*player\s*id|tcg\s*id)/i],
   ['card_number', /(card\s*(#|no\.?|num)|collector\s*(#|no\.?|num)|\bnumber\b|card\s*num)/i],
-  ['name', /(card\s*name|product\s*name|item\s*name|title|\bname\b|\bproduct\b|\bitem\b)/i],
   ['grade', /(grade|\bpsa\b|\bbgs\b|\bcgc\b|\bsgc\b)/i],
   ['condition', /condition/i],
   ['set', /(set|expansion|series|\bgroup\b|edition)/i],
   ['quantity', /(qty|quantity|\bcount\b|owned|holdings|copies|# ?owned)/i],
   ['category', /(category|product\s*type|\btype\b|game)/i],
 ];
+// Card name gets special handling: prefer an explicit "Product/Card/Item Name",
+// then a plain "Name"/"Title" — but NEVER a container column like Collectr's
+// "Portfolio Name" (the lot), which would otherwise win as the first "…Name".
+const NAME_STRONG = /(card|product|item)\s*name/i;
+const NAME_WEAK = /(\bname\b|\btitle\b)/i;
+const NAME_CONTAINER = /(portfolio|collection|binder|folder|deck|lot|account|file|list|shop|store)\s*name/i;
 // Market value gets special handling so a "Paid"/"Cost" column is never mistaken
 // for it: prefer a header containing "market", else any value/price/worth header,
 // always excluding cost-basis columns.
@@ -40,6 +45,12 @@ export function detectColumns(headers) {
   const cols = { name: -1, set: -1, card_number: -1, condition: -1, grade: -1, quantity: -1, price: -1, product_id: -1, category: -1 };
   const used = new Set();
   const norm = headers.map((h) => String(h || '').trim());
+  // Card name first (special-cased), so it claims "Product Name" over "Card Number"
+  // etc. and never lands on a container like "Portfolio Name".
+  let nameIdx = -1;
+  for (let i = 0; i < norm.length; i += 1) { if (!used.has(i) && norm[i] && NAME_STRONG.test(norm[i])) { nameIdx = i; break; } }
+  if (nameIdx < 0) for (let i = 0; i < norm.length; i += 1) { if (!used.has(i) && norm[i] && NAME_WEAK.test(norm[i]) && !NAME_CONTAINER.test(norm[i])) { nameIdx = i; break; } }
+  if (nameIdx >= 0) { cols.name = nameIdx; used.add(nameIdx); }
   for (const [field, re] of FIELD_MATCHERS) {
     for (let i = 0; i < norm.length; i += 1) {
       if (used.has(i) || !norm[i]) continue;
@@ -86,8 +97,28 @@ export function parseCollectrCsv(text) {
 
 // Normalize a text token for matching: lowercase, punctuation → spaces, collapsed.
 const norm = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+// Conditions and grades are written differently across tools (Collectr: "Near
+// Mint", "Ungraded", "PSA 10.0 GEM - MT"; this app: "NM", "", "PSA 10"). Fold
+// both vocabularies to a shared token so the same card matches.
+const COND_MAP = {
+  'near mint': 'nm', nm: 'nm', mint: 'nm', 'nm mt': 'nm', m: 'nm',
+  'lightly played': 'lp', lp: 'lp', 'light play': 'lp', 'slightly played': 'lp', excellent: 'lp', ex: 'lp',
+  'moderately played': 'mp', mp: 'mp', 'moderate play': 'mp', good: 'mp', vg: 'mp',
+  'heavily played': 'hp', hp: 'hp', 'heavy play': 'hp', played: 'hp', poor: 'hp',
+  damaged: 'dmg', dmg: 'dmg', dm: 'dmg',
+};
+const RAW_GRADE = /^(|ungraded|raw|none|not graded|ns|na)$/;
+const normCond = (c) => { const k = norm(c); return COND_MAP[k] || k; };
+// "PSA 10.0 GEM - MT" → "psa 10", "BGS 9.5" → "bgs 9.5", "Ungraded"/"" → "" (raw).
+const normGrade = (g) => {
+  const k = norm(g);
+  if (RAW_GRADE.test(k)) return '';
+  const m = /(psa|bgs|cgc|sgc|ace|tag|hga)\s*([0-9]+)(\s+5)?/.exec(k); // "psa 9 5" → 9.5
+  return m ? `${m[1]} ${m[2]}${m[3] ? '.5' : ''}` : k;
+};
 // A card's condition token is its grade when graded, else its raw condition.
-const condToken = (o) => norm(o.grade || o.condition || '');
+const condToken = (o) => normGrade(o.grade) || normCond(o.condition);
 // Strict key includes the set; loose key drops it (set naming differs between
 // tools, so loose lets us still match when only the set label disagrees).
 const strictKey = (o) => `${norm(o.name)}|${norm(o.set)}|${norm(o.card_number)}|${condToken(o)}`;
