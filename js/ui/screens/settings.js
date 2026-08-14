@@ -1,7 +1,6 @@
 import { dollarsToCents, centsInputValue, formatCents } from '../format.js';
 import { toCsv } from '../../core/csv.js';
 import { APP_VERSION } from '../../config.js';
-import { buildDemoData } from '../../data/demodata.js';
 
 async function save(ctx, tab, row) {
   await ctx.store.put(tab, row);
@@ -81,12 +80,6 @@ export async function render(root, ctx) {
       <h1 style="font-size:16px">Import</h1>
       <p class="muted" style="margin-bottom:8px">Refresh market values from a Collectr export. Previews every change before anything is saved.</p>
       <a class="btn secondary" href="#/import" style="text-decoration:none">⤒ Import from Collectr</a>
-    </div>
-
-    <div class="card">
-      <h1 style="font-size:16px">Demo</h1>
-      <p class="muted" style="margin-bottom:8px">Fill this account with a realistic sample shop — inventory, sales, a trade, and expenses — so you can demo the app to others. <strong>Use a separate demo login</strong>, not your real business.</p>
-      <button class="btn secondary" id="demo-btn">▶ Load demo data</button>
     </div>
 
     <div class="card" style="border-color:var(--neg)">
@@ -171,40 +164,6 @@ export async function render(root, ctx) {
       ctx.toast('Could not reach the database — try again on wifi');
       btn.disabled = false; btn.textContent = '🔧 Repair sync';
     }
-  };
-
-  // Load a sample shop into a DEMO account. Guarded so it can't pollute a real
-  // account (which already has plenty of inventory).
-  root.querySelector('#demo-btn').onclick = async () => {
-    const active = (await ctx.store.getAll('items')).filter((i) => i.quantity_on_hand > 0);
-    if (active.length > 15) { ctx.toast('This account already has inventory — demo data is only for a fresh demo login'); return; }
-    const acct = ctx.auth && ctx.auth.email ? (ctx.auth.email() || 'this account') : 'this account';
-    const ov = document.createElement('div');
-    ov.className = 'modal-overlay';
-    ov.innerHTML = `<div class="modal-card">
-      <h2>Load demo data?</h2>
-      <p class="muted">This adds a sample shop (inventory, sales, a trade, expenses) to <strong>${esc(acct)}</strong>. Only do this on a demo login — not your real business.</p>
-      <button class="btn" id="demo-go">Load sample data</button>
-      <button class="btn ghost" id="demo-cancel">Cancel</button>
-    </div>`;
-    document.body.appendChild(ov);
-    const close = () => ov.remove();
-    ov.querySelector('#demo-cancel').onclick = close;
-    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
-    ov.querySelector('#demo-go').onclick = async () => {
-      const go = ov.querySelector('#demo-go'); go.disabled = true; go.textContent = 'Loading…';
-      try {
-        const gids = await ctx.sync.makeIds();
-        const data = buildDemoData(gids);
-        for (const tab of ['items', 'purchases', 'trades', 'sales', 'expenses']) {
-          for (const row of data[tab] || []) { await ctx.store.put(tab, row); await ctx.sync.enqueue({ kind: 'put', tab, row }); }
-        }
-        await ctx.sync.commitIds();
-        await ctx.syncNow();
-        ctx.toast('Demo data loaded');
-        setTimeout(() => location.reload(), 700);
-      } catch { ctx.toast('Could not load — check your connection'); go.disabled = false; go.textContent = 'Load sample data'; }
-    };
   };
 
   // Full reset behind a pop-up: clicking Reset opens a modal where you must type

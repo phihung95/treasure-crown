@@ -13,6 +13,7 @@ export async function render(root, ctx) {
     <div class="card">
       <p class="muted" style="margin:0 0 10px">Export your collection from Collectr (PRO → export CSV), then load it here to refresh
         the <strong>market value</strong> of matching cards. Your cost, quantity, and buy history are never changed.</p>
+      <p class="muted" style="margin:0 0 10px"><strong>1.</strong> Choose the CSV → <strong>2.</strong> review the preview of price changes → <strong>3.</strong> tap <strong>Apply</strong> to save. Nothing changes until you apply.</p>
       <input type="file" id="file" accept=".csv,text/csv,text/plain" hidden />
       <button class="btn secondary" id="pick">⤒ Choose Collectr CSV…</button>
       <div class="muted" id="fname" style="margin-top:8px" hidden></div>
@@ -52,6 +53,12 @@ export async function render(root, ctx) {
       </div>`;
 
       if (changedCount) {
+        // Primary action FIRST, right under the summary, so the next step is obvious
+        // without scrolling past the (possibly long) list of changes.
+        body += `<div class="card" style="border-color:var(--gold-deep)">
+          <p style="margin:0 0 10px"><strong>${changedCount} price${changedCount === 1 ? '' : 's'}</strong> will update. Nothing is saved until you tap below.</p>
+          <button class="btn" id="apply">✓ Apply ${changedCount} price update${changedCount === 1 ? '' : 's'}</button>
+        </div>`;
         const rows = updates.slice(0, MAX_LIST).map((u) => {
           const it = u.item;
           const meta = [it.set, it.card_number ? `#${it.card_number}` : '', it.grade || it.condition].filter(Boolean).join(' · ');
@@ -63,11 +70,12 @@ export async function render(root, ctx) {
         }).join('');
         const more = changedCount > MAX_LIST ? `<div class="muted" style="padding:8px 0">…and ${changedCount - MAX_LIST} more</div>` : '';
         body += `<div class="card"><div class="panel-h">Price changes (${changedCount})</div>${rows}${more}</div>`;
-        body += `<div class="total-bar">
-          <button class="btn" style="width:auto;margin:0" id="apply">Apply ${changedCount} price update${changedCount === 1 ? '' : 's'}</button>
-        </div>`;
-      } else {
+      } else if (matchedCount) {
         body += `<div class="card"><p class="muted" style="margin:0">Every matched card is already up to date — nothing to change.</p></div>`;
+      } else {
+        // Nothing matched at all — the usual cause of "what's the next step?".
+        body += `<div class="card"><p style="margin:0 0 6px"><strong>No cards matched your inventory.</strong></p>
+          <p class="muted" style="margin:0">This import refreshes the <strong>market value</strong> of cards you already hold — it doesn't add new cards. None of the ${rowCount} rows in this file matched a card in your inventory, so there's nothing to apply. This usually means the card names, sets, or conditions are labelled differently than in your inventory.</p></div>`;
       }
 
       if (unmatched.length) {
@@ -113,5 +121,7 @@ export async function render(root, ctx) {
     const items = await ctx.store.getAll('items');
     plan = parsed.ok ? planPriceUpdate({ reportRows: parsed.rows, items }) : null;
     renderResult(parsed);
+    // Bring the freshly-rendered preview/next-step into view (esp. on mobile).
+    $('#result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 }
