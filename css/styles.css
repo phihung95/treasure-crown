@@ -279,6 +279,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px 
 .undo-btn { width:auto; margin:0; padding:8px 15px; flex:none; }
 .undo-btn.danger { color:#fff; background:var(--neg); border-color:var(--neg); font-weight:800; }
 .sale-row.editing { display:block; padding:12px 0; }
+.imp-pick { cursor:pointer; }
+.imp-cb { width:20px; height:20px; flex:none; accent-color:var(--gold-deep); margin:0; }
+.imp-pick:has(.imp-cb:not(:checked)) { opacity:.45; }
 .recent-h { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
 .recent-today { color:var(--gold-deep); font-weight:800; font-size:12px; text-transform:none; letter-spacing:0; }
 .recent-all { display:block; text-align:center; padding:12px 0 4px; color:var(--gold-deep); font-weight:700; font-size:13px; text-decoration:none; }
