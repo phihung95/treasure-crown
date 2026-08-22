@@ -16,6 +16,19 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
 
   function ensure() { if (!url || !key) throw new Error('backend not configured'); }
 
+  // Build a rich error from a failed response: keep the status AND PostgREST's
+  // own message/hint (it explains exactly what was rejected — a missing column,
+  // an RLS denial, an expired token) so the UI can show WHY, not just "error".
+  async function fail(res, where) {
+    let body = '';
+    try { body = (await res.text()) || ''; } catch { /* body may be unreadable */ }
+    let detail = body;
+    try { const j = JSON.parse(body); detail = [j.message, j.hint].filter(Boolean).join(' — ') || body; } catch { /* not json */ }
+    const err = new Error(`backend error: ${res.status}${where ? ` (${where})` : ''}${detail ? ` · ${detail}` : ''}`);
+    err.status = res.status; err.detail = detail; err.where = where || '';
+    return err;
+  }
+
   // PostgREST rejects a bulk insert unless every row has the identical set of
   // keys. Rows built by different flows (or older data) can differ, so widen
   // every row to the union of keys, filling any it lacks with null.
@@ -33,7 +46,7 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
       headers: { ...(await authHeaders()), Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify(normalize(rows)),
     });
-    if (!res.ok) throw new Error(`backend error: ${res.status}`);
+    if (!res.ok) throw await fail(res, `save ${tab}`);
   }
 
   // Delete EVERY row of a table the caller can see (RLS scopes this to their own
@@ -46,7 +59,7 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
       method: 'DELETE',
       headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
     });
-    if (!res.ok) throw new Error(`backend error: ${res.status}`);
+    if (!res.ok) throw await fail(res, `clear ${tab}`);
   }
 
   // Delete a single row by its primary key (e.g. voiding a sale).
@@ -56,7 +69,7 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
       method: 'DELETE',
       headers: { ...(await authHeaders()), Prefer: 'return=minimal' },
     });
-    if (!res.ok) throw new Error(`backend error: ${res.status}`);
+    if (!res.ok) throw await fail(res, `delete ${tab}`);
   }
 
   return {
@@ -68,7 +81,7 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
       const out = {};
       await Promise.all(DATA_TABS.map(async (tab) => {
         const res = await doFetch(`${base}/${tab}?select=*`, { headers: h });
-        if (!res.ok) throw new Error(`backend error: ${res.status}`);
+        if (!res.ok) throw await fail(res, `load ${tab}`);
         out[tab] = await res.json();
       }));
       return out;
@@ -108,7 +121,7 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
     async getCounters() {
       ensure();
       const res = await doFetch(`${base}/app_meta?id=eq.app&select=counters`, { headers: await authHeaders() });
-      if (!res.ok) throw new Error(`backend error: ${res.status}`);
+      if (!res.ok) throw await fail(res, 'id counters');
       const rows = await res.json();
       return rows[0] ? (rows[0].counters || {}) : {};
     },
@@ -124,7 +137,7 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
     async getMyAccount() {
       ensure();
       const res = await doFetch(`${base}/account_members?select=account_id&limit=1`, { headers: await authHeaders() });
-      if (!res.ok) throw new Error(`backend error: ${res.status}`);
+      if (!res.ok) throw await fail(res, 'membership');
       const rows = await res.json();
       return rows[0] ? rows[0].account_id : null;
     },
@@ -139,7 +152,7 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
         headers: { ...(await authHeaders()), Prefer: 'return=representation' },
         body: JSON.stringify({ account_name: name || null }),
       });
-      if (!res.ok) throw new Error(`backend error: ${res.status}`);
+      if (!res.ok) throw await fail(res, 'create account');
       return res.json(); // scalar text account_id, e.g. "ACC-0002"
     },
   };

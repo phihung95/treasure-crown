@@ -179,6 +179,16 @@ async function boot() {
 
   const pending = async () => { try { return (await store.getAll('queue')).length; } catch { return 0; } };
 
+  // Remember the last server rejection so tapping the red pill can explain WHY
+  // (status + Postgres/PostgREST message), instead of a dead-end "Sync error".
+  let lastSyncError = null;
+  function noteSyncError(e) {
+    lastSyncError = { message: (e && e.message) || 'Unknown error', status: e && e.status, where: e && e.where, at: new Date() };
+    console.error('[tcc] sync error:', lastSyncError.message);
+    setPill('err', 'Sync error · tap to see why');
+  }
+  const clearSyncError = () => { lastSyncError = null; };
+
   const ctx = {
     store, sync, api,
     get settings() { return settings; },
@@ -202,11 +212,12 @@ async function boot() {
       try {
         setPill('pending', n ? `Syncing ${n}…` : 'Syncing…');
         await sync.flush();
+        clearSyncError();
         setPill('ok', 'Synced');
       } catch (e) {
         const left = await pending();
         // Data is safe locally either way; only a server rejection needs the user's attention.
-        if (isServerError(e)) setPill('err', 'Sync error · tap to retry');
+        if (isServerError(e)) noteSyncError(e);
         else setPill('pending', left ? `Saved · ${left} to sync` : 'Offline · saved locally');
       }
     },
@@ -219,10 +230,11 @@ async function boot() {
         setPill('pending', 'Syncing…');
         await sync.flush();
         await sync.pull();
+        clearSyncError();
         setPill('ok', 'Synced');
       } catch (e) {
         const left = await pending();
-        if (isServerError(e)) setPill('err', 'Sync error · tap to retry');
+        if (isServerError(e)) noteSyncError(e);
         else setPill('pending', left ? `Saved · ${left} to sync` : 'Offline · saved locally');
       }
     },
@@ -244,10 +256,11 @@ async function boot() {
       setPill('pending', 'Syncing…');
       await sync.flush();      // push any changes queued offline last session first
       await sync.pull();       // then refresh local from Supabase
+      clearSyncError();
       setPill('ok', 'Synced');
     } catch (e) {
       const left = await pending();
-      if (isServerError(e)) setPill('err', 'Sync error · tap to retry');
+      if (isServerError(e)) noteSyncError(e);
       else setPill('pending', left ? `Saved · ${left} to sync` : 'Offline · saved locally');
     }
   } else {
@@ -256,7 +269,46 @@ async function boot() {
   }
 
   const pillEl = document.getElementById('sync-pill');
-  if (pillEl) { pillEl.title = 'Tap to sync all devices'; pillEl.onclick = async () => { await ctx.reconcile(); route(); }; }
+  if (pillEl) {
+    pillEl.title = 'Tap to sync all devices';
+    pillEl.onclick = async () => {
+      // When there's a standing server error, explain it (and offer retry) rather
+      // than silently re-trying — so the user can see and report exactly why.
+      if (lastSyncError) { showSyncErrorModal(); return; }
+      await ctx.reconcile(); route();
+    };
+  }
+
+  // A readable breakdown of the last sync failure: what operation, the HTTP
+  // status, and the server's own message — plus a one-tap Retry.
+  function showSyncErrorModal() {
+    const e = lastSyncError; if (!e) return;
+    const esc = (x) => String(x == null ? '' : x).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    // Plain-language hint for the most common causes.
+    let hint = 'Your data is safe on this device — nothing was lost. Tap Retry.';
+    if (e.status === 401 || e.status === 403) hint = 'Your login likely expired or lacks access. Try Sign out, then sign back in (Settings), then sync again.';
+    else if (e.status === 400) hint = 'The server rejected a record (a field it didn’t expect). Send this text to your admin.';
+    else if (!e.status) hint = 'Looks like a connection drop. Check your internet and tap Retry.';
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.innerHTML = `<div class="modal-card">
+      <h2 style="color:var(--neg)">Sync error</h2>
+      <p class="muted">${esc(hint)}</p>
+      <div style="background:var(--panel-2,rgba(0,0,0,.06));border:1px solid var(--line,#ddd);border-radius:8px;padding:10px;margin:10px 0;font:12px ui-monospace,Menlo,monospace;word-break:break-word">
+        ${e.where ? `<div><b>While:</b> ${esc(e.where)}</div>` : ''}
+        ${e.status ? `<div><b>Status:</b> ${esc(e.status)}</div>` : ''}
+        <div><b>Detail:</b> ${esc(e.message)}</div>
+        <div style="opacity:.6">${esc(e.at ? e.at.toLocaleString() : '')}</div>
+      </div>
+      <button class="btn" id="se-retry">Retry sync</button>
+      <button class="btn ghost" id="se-close">Close</button>
+    </div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    ov.addEventListener('click', (ev) => { if (ev.target === ov) close(); });
+    ov.querySelector('#se-close').onclick = close;
+    ov.querySelector('#se-retry').onclick = async () => { close(); await ctx.reconcile(); route(); };
+  }
 
   // When the app comes back to the foreground (reopened / tab refocused), pull
   // the latest so a device that sat idle doesn't show stale numbers.
