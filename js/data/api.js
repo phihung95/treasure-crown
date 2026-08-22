@@ -99,10 +99,11 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
         if (!DATA_TABS.includes(op.tab)) continue;
         if (op.kind === 'delete') deletes.push(op);
         else if (op.kind === 'put') {
-          // Stamp the owning account on every write so it lands in the caller's
-          // tenant (and passes the row-level security check). A row that already
-          // carries an account_id (e.g. pulled then edited) keeps it.
-          const row = acct ? { ...op.row, account_id: op.row.account_id || acct } : op.row;
+          // Always stamp the SIGNED-IN account on every outgoing write. A device is
+          // only ever in one tenant, so its data belongs to that tenant — forcing it
+          // here means a row left tagged to another account (e.g. from an account
+          // switch) can never get permanently stuck failing row-level security (403).
+          const row = acct ? { ...op.row, account_id: acct } : op.row;
           (byTab[op.tab] ||= new Map()).set(row[ID_FIELD[op.tab]], row);
         }
       }

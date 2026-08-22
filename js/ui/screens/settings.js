@@ -150,7 +150,10 @@ export async function render(root, ctx) {
         let rows; try { rows = await ctx.store.getAll(tab); } catch { continue; }
         for (const r of rows) {
           if (!r) continue;
-          const fixed = { ...r, account_id: r.account_id || acct };
+          // Force every local row onto THIS account — not just untagged ones — so a
+          // row stranded under a different account (from an old account switch) is
+          // rescued instead of failing row-level security forever.
+          const fixed = { ...r, account_id: acct };
           await ctx.store.put(tab, fixed);
           await ctx.sync.enqueue({ kind: 'put', tab, row: fixed });
           n += 1;
