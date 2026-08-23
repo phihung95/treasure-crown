@@ -310,10 +310,18 @@ async function boot() {
     ov.querySelector('#se-retry').onclick = async () => { close(); await ctx.reconcile(); route(); };
   }
 
-  // When the app comes back to the foreground (reopened / tab refocused), pull
-  // the latest so a device that sat idle doesn't show stale numbers.
-  document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible') { await ctx.reconcile(); route(); }
+  // When the app returns to the foreground, quietly sync in the background so a
+  // device that sat idle picks up other devices' changes — but DON'T re-render
+  // the screen. Switching tabs and coming back should never redraw the view or
+  // interrupt what you're typing. Throttled so quick tab-flips don't re-sync at
+  // all; the new data shows the next time you navigate or pull manually.
+  let lastFgSync = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const now = Date.now();
+    if (now - lastFgSync < 30000) return; // ignore rapid back-and-forth
+    lastFgSync = now;
+    ctx.reconcile(); // fire-and-forget: updates the store + sync pill, not the DOM
   });
 
   async function route() {
