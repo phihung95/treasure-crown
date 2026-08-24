@@ -25,12 +25,13 @@ body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-ser
 .topbar { position:sticky; top:0; display:flex; justify-content:space-between; align-items:center;
   background:var(--surface); padding:calc(11px + env(safe-area-inset-top)) 16px 11px; z-index:10; border-bottom:1px solid var(--line);
   box-shadow:inset 0 -2px 0 rgba(201,162,63,.35); }
-@media (max-width:400px) { .brand { font-size:13.5px; gap:7px; } .brand .t3 { display:none; } }
-.brand { display:flex; align-items:center; gap:9px; font-weight:800; letter-spacing:.4px; font-size:15px; text-transform:uppercase; text-decoration:none; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+@media (max-width:400px) { .brand { font-size:13.5px; gap:7px; } }
+.brand { display:flex; align-items:center; gap:9px; font-weight:800; letter-spacing:.4px; font-size:15px; text-transform:uppercase; text-decoration:none; cursor:pointer; -webkit-tap-highlight-color:transparent; min-width:0; }
 .brand:active { opacity:.7; }
 .brand .crown { width:24px; height:24px; flex:none; display:block; }
-.brand .t1 { color:var(--ink); } .brand .t2 { color:var(--gold-deep); } .brand .t3 { color:var(--ink); }
-.brand .t3 { font-weight:700; letter-spacing:1.2px; font-size:11px; }
+/* The signed-in shop's name. Truncates so a long name never pushes the sync pill
+   off-screen; the crown stays the gold brand mark. */
+.brand .brand-name { color:var(--ink); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* ---- Sync pill: dot + explicit label, color-coded ---- */
 .pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600;

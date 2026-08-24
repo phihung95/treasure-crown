@@ -143,6 +143,15 @@ export function createApi({ url, key, getToken, getAccountId, fetchImpl }) {
       return rows[0] ? rows[0].account_id : null;
     },
 
+    // The signed-in user's business name (RLS scopes `accounts` to their own).
+    async getAccountName() {
+      ensure();
+      const res = await doFetch(`${base}/accounts?select=name&limit=1`, { headers: await authHeaders() });
+      if (!res.ok) throw await fail(res, 'account name');
+      const rows = await res.json();
+      return rows[0] ? (rows[0].name || '') : '';
+    },
+
     // Create a fresh account for the signed-in user (server-side SECURITY DEFINER
     // function derives the email from the token and adds them as owner). Returns
     // the new account_id. Idempotent: returns the existing account if they have one.

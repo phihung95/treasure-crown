@@ -156,6 +156,18 @@ async function boot() {
     settings = await store.getSettings();
   }
 
+  // Show the signed-in shop's name in the top bar. Paint the cached name first
+  // (instant, works offline), then refresh it from the account in the background.
+  const setBrand = (nm) => { const el = document.getElementById('brand-name'); if (el && nm) el.textContent = nm; };
+  setBrand(settings.account_name);
+  if (currentAccountId) {
+    try {
+      const nm = await api.getAccountName();
+      if (nm && nm !== settings.account_name) { await store.setSettings({ account_name: nm }); settings = await store.getSettings(); }
+      setBrand(nm || settings.account_name);
+    } catch { /* offline — keep the cached name */ }
+  }
+
   // Self-heal: a local row with no account_id never reached the shared DB (its
   // NOT-NULL account check rejected it), so it's stranded on this device only —
   // which makes devices disagree. Re-tag + queue any such rows so the flush below
@@ -244,7 +256,7 @@ async function boot() {
     // different account starts clean instead of showing the previous one's data.
     async signOut() {
       for (const tab of [...DATA_TABS, 'queue']) { try { await store.clear(tab); } catch { /* store may lack this table */ } }
-      await store.setSettings({ account_id: null, account_email: null });
+      await store.setSettings({ account_id: null, account_email: null, account_name: null });
       await auth.signOut();
       location.reload();
     },
