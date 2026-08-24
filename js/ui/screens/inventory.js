@@ -7,6 +7,20 @@ async function save(ctx, tab, row) {
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+// The attribute fields each category asks for — shared by the Add form and the
+// inline Edit form so editing an item offers exactly what adding one does.
+const CAT_FIELDS = {
+  single: ['set', 'card_number', 'rarity_variant', 'language', 'condition'],
+  slab: ['set', 'card_number', 'grade', 'grader', 'cert_number'],
+  sealed: ['set', 'product_type', 'language'],
+  print: [], other: [],
+};
+const FIELD_LABEL = { set: 'Set', card_number: 'Card #', rarity_variant: 'Rarity / variant', language: 'Language', condition: 'Condition', grade: 'Grade', grader: 'Grader', cert_number: 'Cert #', product_type: 'Product type' };
+// Every category-specific field, so switching a card's type on edit can clear
+// the ones that no longer apply (e.g. a slab shouldn't keep a raw condition).
+const ALL_ATTR_FIELDS = ['set', 'card_number', 'rarity_variant', 'language', 'condition', 'grade', 'grader', 'cert_number', 'product_type'];
+const fieldsHtml = (cat, src) => (CAT_FIELDS[cat] || []).map((f) => `<label>${FIELD_LABEL[f] || f}</label><input data-ef="${f}" value="${esc((src && src[f]) || '')}" />`).join('');
+
 function attr(i) {
   if (i.category === 'slab') {
     const grade = (i.grade || '').trim();
@@ -103,7 +117,11 @@ export async function render(root, ctx) {
   const editRow = (i) => `
     <div class="inv-row editing">
       <div class="edit-grid">
+        <label>Category</label>
+        <select data-ecat>${CATEGORIES.map((c) => `<option value="${c}" ${c === i.category ? 'selected' : ''}>${catLabel(c)}</option>`).join('')}</select>
+        <label>Name</label>
         <input class="edit-name" data-en value="${esc(i.name)}" aria-label="name" />
+        <div id="edit-fields">${fieldsHtml(i.category, i)}</div>
         <div class="row">
           <div><label>Qty</label><input data-eq inputmode="numeric" value="${i.quantity_on_hand}" /></div>
           <div><label>Unit cost $</label><input data-ecost inputmode="decimal" value="${centsInputValue(i.unit_cost_cents)}" /></div>
@@ -151,13 +169,30 @@ export async function render(root, ctx) {
       el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(el.getAttribute('data-editrow')); } };
     });
     root.querySelectorAll('[data-cancel]').forEach((b) => { b.onclick = () => { editing = null; renderList(); }; });
+    // Changing the category in-edit swaps which attribute fields show, keeping any
+    // values already typed for fields the new category also has (set, card #).
+    root.querySelectorAll('[data-ecat]').forEach((sel) => { sel.onchange = () => {
+      const typed = {}; root.querySelectorAll('[data-ef]').forEach((el) => { typed[el.getAttribute('data-ef')] = el.value; });
+      const item = items.find((x) => x.item_id === editing) || {};
+      const merged = { ...item, ...typed };
+      const box = root.querySelector('#edit-fields');
+      if (box) box.innerHTML = fieldsHtml(sel.value, merged);
+    }; });
     root.querySelectorAll('[data-done]').forEach((b) => { b.onclick = async () => {
       const id = b.getAttribute('data-done');
       const idx = items.findIndex((x) => x.item_id === id);
       if (idx < 0) return;
       const qtyN = parseInt(root.querySelector('[data-eq]').value, 10);
+      const cat = root.querySelector('[data-ecat]').value;
+      // Clear all type-specific attributes, then apply the ones shown for the
+      // chosen category — so switching type never leaves a stale field behind.
+      const cleared = {}; ALL_ATTR_FIELDS.forEach((f) => { cleared[f] = ''; });
+      const shown = {}; root.querySelectorAll('[data-ef]').forEach((el) => { shown[el.getAttribute('data-ef')] = el.value.trim(); });
       const updated = {
         ...items[idx],
+        ...cleared,
+        ...shown,
+        category: cat,
         name: root.querySelector('[data-en]').value.trim() || items[idx].name,
         quantity_on_hand: Number.isFinite(qtyN) ? Math.max(0, qtyN) : items[idx].quantity_on_hand,
         unit_cost_cents: dollarsToCents(root.querySelector('[data-ecost]').value),
@@ -174,14 +209,8 @@ export async function render(root, ctx) {
   };
 
   const catFields = () => {
-    const cat = $('#cat').value;
-    const F = {
-      single: ['set', 'card_number', 'rarity_variant', 'language', 'condition'],
-      slab: ['set', 'card_number', 'grade', 'grader', 'cert_number'],
-      sealed: ['set', 'product_type', 'language'],
-      print: [], other: [],
-    }[cat] || [];
-    $('#fields').innerHTML = F.map((f) => `<label>${f.replace(/_/g, ' ')}</label><input data-f="${f}" />`).join('');
+    const F = CAT_FIELDS[$('#cat').value] || [];
+    $('#fields').innerHTML = F.map((f) => `<label>${FIELD_LABEL[f] || f}</label><input data-f="${f}" />`).join('');
   };
 
   root.querySelectorAll('[data-cf]').forEach((b) => { b.onclick = () => {
