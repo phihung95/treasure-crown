@@ -31,6 +31,64 @@ function inventoryCsv(items) {
 
 const BACKUP_TABS = ['items', 'sales', 'trades', 'purchases', 'print_products', 'print_parts', 'filaments'];
 
+// Repair ordering + schema so smart-repair can re-issue ids safely. Referenced
+// tables (purchases, trades) come before the ones that point at them (items,
+// sales), so a new id is known before a referencing row is pushed.
+const REPAIR_TABS = ['purchases', 'trades', 'items', 'sales', 'cash_events', 'expenses', 'print_products', 'print_parts', 'filaments'];
+const PK_FIELD = { items: 'item_id', sales: 'txn_id', trades: 'trade_id', purchases: 'purchase_id', cash_events: 'cash_id', expenses: 'expense_id', print_products: 'print_product_id', print_parts: 'part_id', filaments: 'filament_id' };
+const KIND_FOR = { items: 'item', sales: 'sale', trades: 'trade', purchases: 'purchase', cash_events: 'cash', expenses: 'expense', print_products: 'printProduct', print_parts: 'part', filaments: 'filament' };
+// Fields that reference another table's primary key — followed when an id changes.
+const REPAIR_REFS = { items: [['source_trade_id', 'trades'], ['source_purchase_id', 'purchases']], sales: [['item_id', 'items'], ['trade_id', 'trades']] };
+
+// When a plain re-upload hits a 403, a local row's id already belongs to ANOTHER
+// account in the shared table (leftover from an old account switch). Push each
+// row on its own; for any that collide, mint a fresh id and remap references so
+// nothing is orphaned. Returns how many were pushed / re-issued.
+async function smartRepair(ctx, acct) {
+  // The failed bulk flush left its put-ops in the queue; drop them and re-push
+  // straight from the local store, one row at a time, so we can fix exact rows.
+  try { await ctx.store.clear('queue'); } catch { /* no queue store */ }
+  const ids = await ctx.sync.makeIds();
+  const remap = {}; // { table: { oldId: newId } }
+  const applyRefs = (tab, row) => {
+    let out = row;
+    for (const [field, rtab] of (REPAIR_REFS[tab] || [])) {
+      const m = remap[rtab]; const v = out[field];
+      if (m && v && m[v]) out = { ...out, [field]: m[v] };
+    }
+    return out;
+  };
+  let pushed = 0; let reminted = 0;
+  for (const tab of REPAIR_TABS) {
+    let rows; try { rows = await ctx.store.getAll(tab); } catch { continue; }
+    for (const orig of rows) {
+      if (!orig) continue;
+      const row = applyRefs(tab, { ...orig, account_id: acct });
+      try {
+        await ctx.api.push([{ kind: 'put', tab, row }]);
+        if (row !== orig) await ctx.store.put(tab, row); // persist any ref update
+        pushed += 1;
+      } catch (err) {
+        if (!(err && err.status === 403)) throw err; // a real failure — bubble up
+        // Id collides with another account's row → give it a brand-new one.
+        const pk = PK_FIELD[tab];
+        const oldId = row[pk];
+        const newId = ids[KIND_FOR[tab]]();
+        (remap[tab] ||= {})[oldId] = newId;
+        const newRow = { ...row, [pk]: newId };
+        await ctx.api.push([{ kind: 'put', tab, row: newRow }]);
+        try { await ctx.store.remove(tab, oldId); } catch { /* ignore */ }
+        await ctx.store.put(tab, newRow);
+        pushed += 1; reminted += 1;
+      }
+    }
+  }
+  await ctx.sync.commitIds();
+  await ctx.sync.flush(); // queue is empty → just publishes the advanced id counters
+  await ctx.sync.pull();
+  return { pushed, reminted };
+}
+
 export async function render(root, ctx) {
   const s = ctx.settings;
 
@@ -140,7 +198,22 @@ export async function render(root, ctx) {
       await ctx.sync.pull();  // …then pull, so nothing local is lost
       ctx.toast(`Re-uploaded ${n} record(s) — all devices now match`);
       ctx.refresh();
-    } catch {
+    } catch (e) {
+      // A 403 means a local row's id already belongs to another account in the
+      // shared table. Recover by re-issuing fresh ids for just those rows.
+      if (e && e.status === 403) {
+        btn.textContent = 'Fixing IDs…';
+        try {
+          const { pushed, reminted } = await smartRepair(ctx, acct);
+          ctx.toast(reminted ? `Fixed ${reminted} stuck record(s) · synced ${pushed}` : `Synced ${pushed} record(s)`);
+          ctx.refresh();
+          return;
+        } catch {
+          ctx.toast('Could not finish repair — try again on wifi');
+          btn.disabled = false; btn.textContent = '🔧 Repair sync';
+          return;
+        }
+      }
       ctx.toast('Could not reach the database — try again on wifi');
       btn.disabled = false; btn.textContent = '🔧 Repair sync';
     }
