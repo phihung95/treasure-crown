@@ -1,4 +1,3 @@
-import { dollarsToCents, centsInputValue, formatCents } from '../format.js';
 import { toCsv } from '../../core/csv.js';
 import { APP_VERSION } from '../../config.js';
 
@@ -42,30 +41,17 @@ export async function render(root, ctx) {
     ${acct ? `<div class="card acct-card"><span class="muted">Signed in as <strong style="color:var(--ink)">${esc(acct)}</strong></span>
       <button class="btn ghost" id="signout" style="width:auto;margin:0">Sign out</button></div>` : ''}
     <div class="card">
-      <h1 style="font-size:16px">Sources</h1>
-      ${s.current_show
-        ? `<p class="muted">Active source: <strong style="color:var(--gold-deep)">${esc(s.current_show)}</strong> — auto-fills Buy / Sell / Trade.</p>`
-        : '<p class="muted">No active source yet. Set one on Buy, Sell, or Trade, or add it below.</p>'}
-      <label>Your sources (comma-separated)</label>
-      <input id="events" value="${esc((s.events || []).join(', '))}" placeholder="Card show, Facebook Marketplace, eBay" />
-      <p class="muted" style="margin-top:6px">Sources you type on Buy / Sell / Trade are saved here. Set each one's type (show, online…) in the Sources tab.</p>
+      <h1 style="font-size:16px">Buying</h1>
+      <label>Default buy rate — the % of market value you pay</label>
+      <input id="buypct" inputmode="numeric" value="${s.buy_percent ?? 80}" />
+      <p class="muted" style="margin-top:6px">Pre-fills your offer on every Buy and Trade. You can still change it on any deal.</p>
+      <button class="btn" id="save">Save</button>
     </div>
 
     <div class="card">
-      <h1 style="font-size:16px">Rates &amp; backend</h1>
-      <label>Default buy rate (% of market value you pay)</label>
-      <input id="buypct" inputmode="numeric" value="${s.buy_percent ?? 80}" />
-      <label>Machine hourly rate (electricity + wear), $/hr</label>
-      <input id="rate" inputmode="decimal" value="${centsInputValue(s.machine_hourly_rate_cents || 0)}" />
-      <label>Supabase project URL</label>
-      <input id="url" value="${esc(s.supabase_url || '')}" placeholder="https://xxxx.supabase.co" autocomplete="off" />
-      <label>Supabase anon key</label>
-      <input id="token" value="${esc(s.supabase_key || '')}" placeholder="eyJhbGciOi…" autocomplete="off" />
-      <p class="muted" style="margin-top:6px">Connects this device to your shared database. Same URL + key on every device.</p>
-      <button class="btn" id="save">Save &amp; connect</button>
-      <button class="btn secondary" id="pull">Pull now</button>
+      <h1 style="font-size:16px">Devices &amp; sync</h1>
+      <p class="muted" style="margin-bottom:8px">Your data syncs across every device automatically. Seeing different totals on another device? Repair re-uploads anything stuck on this one.</p>
       <button class="btn ghost" id="repair">🔧 Repair sync</button>
-      <p class="muted" style="margin-top:4px">Different totals on another device? Tap this to re-upload anything stuck on this device to the shared database.</p>
     </div>
 
     <div class="card">
@@ -93,14 +79,10 @@ export async function render(root, ctx) {
 
   root.querySelector('#save').onclick = async () => {
     await ctx.store.setSettings({
-      supabase_url: root.querySelector('#url').value.trim(),
-      supabase_key: root.querySelector('#token').value.trim(),
-      machine_hourly_rate_cents: dollarsToCents(root.querySelector('#rate').value),
       buy_percent: Math.max(1, Math.min(100, parseInt(root.querySelector('#buypct').value, 10) || 80)),
-      events: root.querySelector('#events').value.split(',').map((x) => x.trim()).filter(Boolean),
     });
-    ctx.toast('Saved — reloading');
-    setTimeout(() => location.reload(), 600);
+    await ctx.reloadSettings();
+    ctx.toast('Saved');
   };
 
   const stamp = () => (s.current_date || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '') || 'export';
@@ -125,11 +107,6 @@ export async function render(root, ctx) {
 
   const signout = root.querySelector('#signout');
   if (signout) signout.onclick = () => ctx.signOut();
-
-  root.querySelector('#pull').onclick = async () => {
-    try { await ctx.sync.pull(); ctx.toast('Pulled from Sheet'); ctx.refresh(); }
-    catch { ctx.toast('Could not reach backend'); }
-  };
 
   // Repair sync: re-tag any local record missing its account_id (which is why it
   // never uploaded), push it up, THEN pull — so stranded records finally land in
